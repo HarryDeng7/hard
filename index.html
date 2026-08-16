@@ -1,0 +1,187 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>生活闯关 · Life Quest</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============ 关卡选择界面 ============ -->
+<main id="screen-menu" class="screen">
+  <header class="topbar">
+    <div class="brand">
+      <h1>🎮 生活闯关</h1>
+      <p class="tagline">完成任务 · 解锁关卡 · 赢取奖励</p>
+    </div>
+    <div class="stats" id="stats">
+      <span class="stat-item"><b id="stat-done">0</b> / <b id="stat-total">0</b> 已完成</span>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <button class="btn btn-primary" id="add-level-btn">＋ 添加任务</button>
+    <div class="filter" id="filter-bar">
+      <button class="chip active" data-filter="all">全部</button>
+      <button class="chip" data-filter="todo">未完成</button>
+      <button class="chip" data-filter="done">已完成</button>
+    </div>
+  </div>
+
+  <section class="level-grid" id="level-grid"></section>
+
+  <p class="empty-hint" id="empty-hint" hidden>还没有关卡，点击上方「添加任务」创建你的第一个生活任务吧！</p>
+</main>
+
+<!-- ============ 游戏界面 ============ -->
+<section id="screen-game" class="screen" hidden>
+  <header class="game-topbar">
+    <button class="btn btn-ghost" id="game-back-btn">← 返回关卡</button>
+    <div class="game-title-wrap">
+      <span class="level-tag" id="game-level-tag">LEVEL 01</span>
+      <span class="game-title" id="game-level-title">任务标题</span>
+    </div>
+    <div class="game-hud">
+      <span class="hud-item" id="hud-coins">🪙 0</span>
+      <span class="hud-item" id="hud-progress">🏁 0%</span>
+    </div>
+  </header>
+
+  <div class="game-stage">
+    <canvas id="game-canvas" width="960" height="540"></canvas>
+
+    <!-- 游戏开始前：任务确认 -->
+    <div class="overlay" id="overlay-intro">
+      <div class="overlay-card">
+        <div class="overlay-level">LEVEL <b id="intro-level-num">01</b></div>
+        <h2>本关生活任务</h2>
+        <p class="overlay-task" id="intro-task"></p>
+        <p class="overlay-tip">你已经在现实中完成了它吗？<br>那就进入关卡，赢取属于你的奖励吧！</p>
+        <div class="overlay-actions">
+          <button class="btn btn-ghost" id="intro-back-btn">返回</button>
+          <button class="btn btn-primary" id="intro-start-btn">我已完成任务 · 开始游戏</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 暂停 -->
+    <div class="overlay" id="overlay-pause" hidden>
+      <div class="overlay-card">
+        <h2>⏸ 已暂停</h2>
+        <p class="overlay-tip">按 P / Esc 也可暂停</p>
+        <div class="overlay-actions">
+          <button class="btn btn-ghost" id="pause-quit-btn">返回关卡</button>
+          <button class="btn btn-primary" id="pause-resume-btn">继续游戏</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 胜利 -->
+    <div class="overlay" id="overlay-win" hidden>
+      <div class="overlay-card win-card">
+        <div class="win-emoji">🏆</div>
+        <h2>关卡完成！</h2>
+        <p class="overlay-task" id="win-task"></p>
+        <p class="win-line" id="win-stats-line"></p>
+        <div class="overlay-actions">
+          <button class="btn btn-ghost" id="win-again-btn">再玩一次</button>
+          <button class="btn btn-primary" id="win-return-btn">返回关卡选择</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 失败 -->
+    <div class="overlay" id="overlay-fail" hidden>
+      <div class="overlay-card">
+        <div class="fail-emoji">💀</div>
+        <h2>挑战失败</h2>
+        <p class="overlay-tip">别灰心，再试一次！</p>
+        <div class="overlay-actions">
+          <button class="btn btn-ghost" id="fail-return-btn">返回关卡</button>
+          <button class="btn btn-primary" id="fail-retry-btn">重新挑战</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 移动端触控 -->
+    <div class="touch-controls" id="touch-controls" hidden>
+      <div class="touch-left">
+        <button class="touch-btn" id="touch-left" data-key="left">◀</button>
+        <button class="touch-btn" id="touch-right" data-key="right">▶</button>
+      </div>
+      <button class="touch-btn touch-jump" id="touch-jump" data-key="jump">⤒</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 任务编辑弹窗 ============ -->
+<div class="modal-mask" id="modal-level" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="modal-title">添加任务</h3>
+      <button class="modal-close" id="modal-close">✕</button>
+    </div>
+    <form id="level-form">
+      <label class="field">
+        <span>任务名称 <i>*</i></span>
+        <input type="text" id="f-title" maxlength="30" placeholder="例如：完成 30 分钟锻炼" required>
+      </label>
+      <label class="field">
+        <span>任务描述（可选）</span>
+        <textarea id="f-desc" rows="3" maxlength="120" placeholder="记录任务的细节要求…"></textarea>
+      </label>
+      <label class="field">
+        <span>关卡难度（影响游戏关卡长度与障碍）</span>
+        <div class="star-picker" id="f-difficulty">
+          <button type="button" class="star" data-v="1">★</button>
+          <button type="button" class="star" data-v="2">★</button>
+          <button type="button" class="star" data-v="3">★</button>
+          <button type="button" class="star" data-v="4">★</button>
+          <button type="button" class="star" data-v="5">★</button>
+        </div>
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="form-cancel">取消</button>
+        <button type="submit" class="btn btn-primary" id="form-submit">保存关卡</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ 删除确认弹窗 ============ -->
+<div class="modal-mask" id="modal-delete" hidden>
+  <div class="modal modal-small">
+    <div class="modal-head">
+      <h3>删除关卡</h3>
+      <button class="modal-close" id="del-close">✕</button>
+    </div>
+    <p class="del-text">确定要删除关卡「<b id="del-name"></b>」吗？<br>完成后该关卡将从列表中移除。</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="del-cancel">取消</button>
+      <button class="btn btn-danger" id="del-confirm">删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 撤销完成确认 -->
+<div class="modal-mask" id="modal-uncomplete" hidden>
+  <div class="modal modal-small">
+    <div class="modal-head">
+      <h3>撤销完成</h3>
+      <button class="modal-close" id="un-close">✕</button>
+    </div>
+    <p class="del-text">将「<b id="un-name"></b>」恢复为未完成状态？</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="un-cancel">取消</button>
+      <button class="btn btn-danger" id="un-confirm">撤销</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="app.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
