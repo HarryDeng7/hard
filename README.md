@@ -1,32 +1,41 @@
-﻿# 生活闯关 · Life Quest 🎮
+﻿# Hard Workers' Arcade 🕹️
 
-把现实生活中的任务变成游戏关卡：每完成一个真实任务，就解锁一关马里奥风格的横屏跑酷小游戏。通关后，关卡会与任务一起标记为「已完成」。
+Turn your to-do list into an arcade. Every task you add becomes a plushie inside a claw machine — play the machine to **grab your next task**, and finishing tasks pays out coins and tickets. Just like Sally and her teddy bear: you'll spend way more time (and coins) than you planned. That's the point.
 
-Turn real-life tasks into game levels: finish a task in real life, then play a Mario-style side-scrolling platformer as your reward. Beat the level and it gets marked as completed together with the task.
+## How it works
 
-## 功能 Features
+1. **Add a task** (1–3★ difficulty) → it drops into the claw machine as a plushie
+2. **Play the arcade** → 1 coin per play. Line up the claw, drop it, and the plushie you grab becomes your **NEXT UP** task
+3. **Finish the task** → confetti, retro sound effects, coins + tickets, and a daily streak 🔥
+4. **Hit the Prize Wall** → trade tickets for legendary prizes (Tootsie Roll, Golden Claw Trophy, Champion Plushie…) and keep them in your locker
 
-- 🗂 关卡选择页：每个关卡对应一个你自定义的生活任务
-- ✏️ 添加 / 编辑 / 删除任务，可设置 1-5 星难度（难度影响关卡长度与障碍密度）
-- 🕹 马里奥风格横屏跑酷：跳跃、收集金币、顶问号块、躲避尖刺、冲向终点旗杆
-- ✅ 通关后任务自动标记「已完成」并记录完成时间（可撤销）
-- 📊 统计挑战次数 / 通关次数，顶部显示完成进度
-- 📱 响应式布局 + 移动端触控按钮
-- 🔒 纯原生 HTML/CSS/JS，无任何依赖；数据保存在浏览器 localStorage
+## Features
 
-## 操作 Controls
+- 🗂️ Add / complete / delete tasks with 1–3 star difficulty
+- 🧸 Working claw machine: aim matters, and yes — sometimes the claw "slips"
+- 🪙 Coin economy: complete tasks to earn more plays (3–9 coins per task)
+- 🎟️ Ticket system + prize wall with collectible locker badges
+- 🔥 Daily completion streak tracking
+- 🏅 Hall of Fame of completed tasks
+- 🎵 Retro synth sound effects (Web Audio API — no audio files)
+- 🎉 Canvas confetti celebrations
+- 💾 Everything persists in `localStorage`
+- 📱 Responsive neon-arcade design, keyboard + touch controls
 
-| 操作 | 键盘 | 触屏 |
+## Controls
+
+| Action | Keyboard | Buttons |
 | --- | --- | --- |
-| 移动 | ← → 或 A D | ◀ ▶ |
-| 跳跃 | 空格 / ↑ / W | ⤒ |
-| 暂停 | P 或 Esc | — |
+| Move claw | ← → or A D | ◀ ▶ |
+| Drop claw | Space / Enter | ⬇ DROP |
 
-## 本地运行 Local
+## Local run
 
-直接用浏览器打开 `index.html`，或：
+Open `index.html` directly in a browser, or serve it:
 
 ```bash
-python -m http.server 8611
-# 访问 http://localhost:8611
+python -m http.server 8080
+# visit http://localhost:8080
 ```
+
+Pure HTML / CSS / JavaScript — no frameworks, no build step.

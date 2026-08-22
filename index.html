@@ -1,187 +1,174 @@
 ﻿<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>生活闯关 · Life Quest</title>
-<link rel="stylesheet" href="style.css">
+<meta name="description" content="Hard Workers' Arcade — track your tasks and pick what's next with a claw machine.">
+<title>Hard Workers' Arcade</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🕹️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<canvas id="confetti-canvas" aria-hidden="true"></canvas>
 
-<!-- ============ 关卡选择界面 ============ -->
-<main id="screen-menu" class="screen">
-  <header class="topbar">
-    <div class="brand">
-      <h1>🎮 生活闯关</h1>
-      <p class="tagline">完成任务 · 解锁关卡 · 赢取奖励</p>
+<header class="site-header">
+  <div class="header-inner">
+    <div class="logo">
+      <span class="logo-icon">🕹️</span>
+      <h1>HARD WORKERS' <span>ARCADE</span></h1>
     </div>
-    <div class="stats" id="stats">
-      <span class="stat-item"><b id="stat-done">0</b> / <b id="stat-total">0</b> 已完成</span>
-    </div>
-  </header>
-
-  <div class="toolbar">
-    <button class="btn btn-primary" id="add-level-btn">＋ 添加任务</button>
-    <div class="filter" id="filter-bar">
-      <button class="chip active" data-filter="all">全部</button>
-      <button class="chip" data-filter="todo">未完成</button>
-      <button class="chip" data-filter="done">已完成</button>
-    </div>
+    <nav class="tabs" aria-label="Site navigation">
+      <button class="tab active" data-view="tasks">📋 Tasks</button>
+      <button class="tab" data-view="arcade">🕹️ Arcade</button>
+      <button class="tab" data-view="prizes">🏆 Prizes</button>
+    </nav>
   </div>
+</header>
 
-  <section class="level-grid" id="level-grid"></section>
+<main class="container">
 
-  <p class="empty-hint" id="empty-hint" hidden>还没有关卡，点击上方「添加任务」创建你的第一个生活任务吧！</p>
+  <!-- ================= TASKS ================= -->
+  <section id="view-tasks" class="view active">
+    <div class="stats-strip">
+      <div class="stat stat-coin">
+        <span class="stat-icon">🪙</span>
+        <span class="stat-value" id="stat-coins">0</span>
+        <span class="stat-label">coins</span>
+      </div>
+      <div class="stat stat-ticket">
+        <span class="stat-icon">🎟️</span>
+        <span class="stat-value" id="stat-tickets">0</span>
+        <span class="stat-label">tickets</span>
+      </div>
+      <div class="stat stat-streak">
+        <span class="stat-icon">🔥</span>
+        <span class="stat-value" id="stat-streak">0</span>
+        <span class="stat-label">day streak</span>
+      </div>
+      <div class="stat stat-done">
+        <span class="stat-icon">✅</span>
+        <span class="stat-value" id="stat-done">0</span>
+        <span class="stat-label">done</span>
+      </div>
+    </div>
+
+    <div id="now-playing" class="now-playing hidden">
+      <div class="np-label">🎯 NEXT UP — grabbed by the claw!</div>
+      <div class="np-body">
+        <div class="np-emoji" id="np-emoji">🧸</div>
+        <div class="np-info">
+          <div class="np-name" id="np-name">—</div>
+          <div class="np-meta" id="np-meta">—</div>
+        </div>
+        <button class="btn btn-success np-btn" id="np-complete">✓ Finish it!</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 class="panel-title">➕ Add a task</h2>
+      <form id="add-task-form" class="add-form">
+        <input type="text" id="task-input" class="text-input" placeholder="What needs doing?" maxlength="60" autocomplete="off" required>
+        <div class="star-picker" aria-label="Pick a difficulty">
+          <span class="star-picker-label">Difficulty</span>
+          <button type="button" class="star-btn on" data-stars="1" title="Easy">★</button>
+          <button type="button" class="star-btn on" data-stars="2" title="Medium">★</button>
+          <button type="button" class="star-btn" data-stars="3" title="Hard">★</button>
+          <span class="star-hint" id="star-hint">easy — 3 coins · 25 tickets</span>
+        </div>
+        <button type="submit" class="btn btn-primary add-btn">Add to machine 🧸</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2 class="panel-title">🗂️ Task list <span class="count-chip" id="task-count">0</span></h2>
+      <ul id="task-list" class="task-list"></ul>
+      <div id="task-list-empty" class="empty-state">No tasks yet — add one above, then go grab it at the arcade! 🕹️</div>
+    </div>
+
+    <div class="panel">
+      <h2 class="panel-title">🏅 Hall of fame</h2>
+      <ul id="done-list" class="done-list"></ul>
+      <div id="done-empty" class="empty-state">Nothing completed yet. The claw awaits! 🧸</div>
+    </div>
+  </section>
+
+  <!-- ================= ARCADE ================= -->
+  <section id="view-arcade" class="view">
+    <div class="arcade-layout">
+      <div class="machine-column">
+        <div class="machine">
+          <div class="machine-title">🧸 CLAW MACHINE</div>
+          <div class="machine-subtitle">grab a task. commit. conquer. <span class="sub-easter">(physics not included)</span></div>
+          <div class="glass" id="glass">
+            <div class="glare"></div>
+            <div class="claw" id="claw">
+              <div class="claw-arm"></div>
+              <div class="claw-head">
+                <div class="claw-prong left"></div>
+                <div class="claw-prong right"></div>
+              </div>
+              <div class="claw-prize" id="claw-prize">🧸</div>
+            </div>
+            <div class="pile" id="pile"></div>
+            <div class="chute" id="chute"><span class="chute-arrow">▼</span></div>
+          </div>
+          <div class="machine-base">
+            <div class="machine-status" id="machine-status">Loading…</div>
+            <div class="machine-sub">est. by Sally 🥛 · approved by Brandon</div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <button type="button" class="btn btn-ctl" id="btn-left" aria-label="Move claw left">◀</button>
+          <button type="button" class="btn btn-ctl" id="btn-right" aria-label="Move claw right">▶</button>
+          <button type="button" class="btn btn-primary btn-drop" id="btn-drop">⬇ DROP</button>
+        </div>
+        <p class="keyboard-hint">or use <kbd>←</kbd> <kbd>→</kbd> to move and <kbd>Space</kbd> to drop</p>
+      </div>
+
+      <aside class="arcade-side">
+        <div class="panel">
+          <h2 class="panel-title">🪙 Coins: <span class="neon-yellow" id="arcade-coins">0</span></h2>
+          <p class="muted">Every play costs <strong>1 coin</strong>. Finish tasks to earn <strong>3–9 coins</strong> and <strong>25–75 tickets</strong>.</p>
+          <div class="how-to">
+            <p><b>1.</b> Add tasks — they become plushies.</p>
+            <p><b>2.</b> Line up the claw and drop it.</p>
+            <p><b>3.</b> The plushie you grab is your <b>next task</b>.</p>
+            <p><b>4.</b> Finish it → coins, tickets &amp; confetti!</p>
+          </div>
+        </div>
+        <div class="panel">
+          <h2 class="panel-title">📜 Machine log</h2>
+          <ul id="game-log" class="game-log"></ul>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ================= PRIZES ================= -->
+  <section id="view-prizes" class="view">
+    <div class="panel prize-banner">
+      <h2 class="panel-title">🎟️ Ticket counter</h2>
+      <div class="ticket-count"><span id="prize-tickets">0</span> tickets</div>
+      <p class="muted">Earn tickets by finishing tasks, then trade them for legendary prizes.</p>
+    </div>
+    <div class="panel">
+      <h2 class="panel-title">🏆 Prize wall</h2>
+      <div id="prize-grid" class="prize-grid"></div>
+    </div>
+    <div class="panel">
+      <h2 class="panel-title">🧳 My locker</h2>
+      <div id="locker" class="locker"></div>
+    </div>
+  </section>
+
 </main>
 
-<!-- ============ 游戏界面 ============ -->
-<section id="screen-game" class="screen" hidden>
-  <header class="game-topbar">
-    <button class="btn btn-ghost" id="game-back-btn">← 返回关卡</button>
-    <div class="game-title-wrap">
-      <span class="level-tag" id="game-level-tag">LEVEL 01</span>
-      <span class="game-title" id="game-level-title">任务标题</span>
-    </div>
-    <div class="game-hud">
-      <span class="hud-item" id="hud-coins">🪙 0</span>
-      <span class="hud-item" id="hud-progress">🏁 0%</span>
-    </div>
-  </header>
-
-  <div class="game-stage">
-    <canvas id="game-canvas" width="960" height="540"></canvas>
-
-    <!-- 游戏开始前：任务确认 -->
-    <div class="overlay" id="overlay-intro">
-      <div class="overlay-card">
-        <div class="overlay-level">LEVEL <b id="intro-level-num">01</b></div>
-        <h2>本关生活任务</h2>
-        <p class="overlay-task" id="intro-task"></p>
-        <p class="overlay-tip">你已经在现实中完成了它吗？<br>那就进入关卡，赢取属于你的奖励吧！</p>
-        <div class="overlay-actions">
-          <button class="btn btn-ghost" id="intro-back-btn">返回</button>
-          <button class="btn btn-primary" id="intro-start-btn">我已完成任务 · 开始游戏</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 暂停 -->
-    <div class="overlay" id="overlay-pause" hidden>
-      <div class="overlay-card">
-        <h2>⏸ 已暂停</h2>
-        <p class="overlay-tip">按 P / Esc 也可暂停</p>
-        <div class="overlay-actions">
-          <button class="btn btn-ghost" id="pause-quit-btn">返回关卡</button>
-          <button class="btn btn-primary" id="pause-resume-btn">继续游戏</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 胜利 -->
-    <div class="overlay" id="overlay-win" hidden>
-      <div class="overlay-card win-card">
-        <div class="win-emoji">🏆</div>
-        <h2>关卡完成！</h2>
-        <p class="overlay-task" id="win-task"></p>
-        <p class="win-line" id="win-stats-line"></p>
-        <div class="overlay-actions">
-          <button class="btn btn-ghost" id="win-again-btn">再玩一次</button>
-          <button class="btn btn-primary" id="win-return-btn">返回关卡选择</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 失败 -->
-    <div class="overlay" id="overlay-fail" hidden>
-      <div class="overlay-card">
-        <div class="fail-emoji">💀</div>
-        <h2>挑战失败</h2>
-        <p class="overlay-tip">别灰心，再试一次！</p>
-        <div class="overlay-actions">
-          <button class="btn btn-ghost" id="fail-return-btn">返回关卡</button>
-          <button class="btn btn-primary" id="fail-retry-btn">重新挑战</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 移动端触控 -->
-    <div class="touch-controls" id="touch-controls" hidden>
-      <div class="touch-left">
-        <button class="touch-btn" id="touch-left" data-key="left">◀</button>
-        <button class="touch-btn" id="touch-right" data-key="right">▶</button>
-      </div>
-      <button class="touch-btn touch-jump" id="touch-jump" data-key="jump">⤒</button>
-    </div>
-  </div>
-</section>
-
-<!-- ============ 任务编辑弹窗 ============ -->
-<div class="modal-mask" id="modal-level" hidden>
-  <div class="modal">
-    <div class="modal-head">
-      <h3 id="modal-title">添加任务</h3>
-      <button class="modal-close" id="modal-close">✕</button>
-    </div>
-    <form id="level-form">
-      <label class="field">
-        <span>任务名称 <i>*</i></span>
-        <input type="text" id="f-title" maxlength="30" placeholder="例如：完成 30 分钟锻炼" required>
-      </label>
-      <label class="field">
-        <span>任务描述（可选）</span>
-        <textarea id="f-desc" rows="3" maxlength="120" placeholder="记录任务的细节要求…"></textarea>
-      </label>
-      <label class="field">
-        <span>关卡难度（影响游戏关卡长度与障碍）</span>
-        <div class="star-picker" id="f-difficulty">
-          <button type="button" class="star" data-v="1">★</button>
-          <button type="button" class="star" data-v="2">★</button>
-          <button type="button" class="star" data-v="3">★</button>
-          <button type="button" class="star" data-v="4">★</button>
-          <button type="button" class="star" data-v="5">★</button>
-        </div>
-      </label>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-ghost" id="form-cancel">取消</button>
-        <button type="submit" class="btn btn-primary" id="form-submit">保存关卡</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- ============ 删除确认弹窗 ============ -->
-<div class="modal-mask" id="modal-delete" hidden>
-  <div class="modal modal-small">
-    <div class="modal-head">
-      <h3>删除关卡</h3>
-      <button class="modal-close" id="del-close">✕</button>
-    </div>
-    <p class="del-text">确定要删除关卡「<b id="del-name"></b>」吗？<br>完成后该关卡将从列表中移除。</p>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" id="del-cancel">取消</button>
-      <button class="btn btn-danger" id="del-confirm">删除</button>
-    </div>
-  </div>
-</div>
-
-<!-- 撤销完成确认 -->
-<div class="modal-mask" id="modal-uncomplete" hidden>
-  <div class="modal modal-small">
-    <div class="modal-head">
-      <h3>撤销完成</h3>
-      <button class="modal-close" id="un-close">✕</button>
-    </div>
-    <p class="del-text">将「<b id="un-name"></b>」恢复为未完成状态？</p>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" id="un-cancel">取消</button>
-      <button class="btn btn-danger" id="un-confirm">撤销</button>
-    </div>
-  </div>
-</div>
-
-<div class="toast" id="toast" hidden></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="app.js"></script>
-<script src="game.js"></script>
 </body>
 </html>
