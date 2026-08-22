@@ -8,7 +8,10 @@
 
 /* ---------- storage ---------- */
 
-const STORE_KEY = "hwa_state_v1";
+const STORE_KEY = "hwa_state_v1";       // legacy key, migrated into the first account
+const ACCOUNTS_KEY = "hwa_accounts_v1";
+const SESSION_KEY = "hwa_session_v1";
+const stateKey = (id) => "hwa_state_" + id;
 
 const defaultState = () => ({
   tasks: [],            // { id, name, stars, status: 'todo'|'picked'|'done', createdAt, completedAt }
@@ -20,9 +23,46 @@ const defaultState = () => ({
   pickedId: null,
 });
 
-function loadState() {
+let accounts = loadAccounts(); // [{ id, username, avatar, createdAt, equippedFrame, frames[], checkIn{} }]
+let currentAccount = null;      // the logged-in player
+let state = null;               // game state of the logged-in player
+
+function loadAccounts() {
   try {
-    const raw = localStorage.getItem(STORE_KEY);
+    const raw = localStorage.getItem(ACCOUNTS_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveAccounts() {
+  try {
+    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+  } catch (e) {
+    /* storage full or unavailable — keep running in memory */
+  }
+}
+
+function loadSession() {
+  try {
+    return localStorage.getItem(SESSION_KEY) || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveSession(id) {
+  try {
+    if (id) localStorage.setItem(SESSION_KEY, id);
+    else localStorage.removeItem(SESSION_KEY);
+  } catch (e) {}
+}
+
+function loadState(id) {
+  try {
+    const raw = localStorage.getItem(stateKey(id));
     if (!raw) return defaultState();
     const s = JSON.parse(raw);
     const st = Object.assign(defaultState(), s);
@@ -37,14 +77,23 @@ function loadState() {
 }
 
 function saveState() {
+  if (!currentAccount) return;
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    localStorage.setItem(stateKey(currentAccount.id), JSON.stringify(state));
   } catch (e) {
     /* storage full or unavailable — keep running in memory */
   }
 }
 
-let state = loadState();
+/* one-time migration: pre-account data moves into the first account created */
+function migrateLegacy(accountId) {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return;
+    localStorage.setItem(stateKey(accountId), raw);
+    localStorage.removeItem(STORE_KEY);
+  } catch (e) {}
+}
 
 /* ---------- helpers ---------- */
 
@@ -72,6 +121,268 @@ function hashStr(s) {
 const PLUSH_EMOJIS = ["🧸", "🐻", "🐰", "🐼", "🦊", "🐷", "🐸", "🦄", "🐙", "🐥", "🐹", "🦁", "🐨", "🐯"];
 const PLUSH_COLORS = ["#ff8fb3", "#a78bfa", "#60a5fa", "#34d399", "#fbbf24", "#f87171", "#22d3ee", "#f472b6", "#a3e635", "#fb923c"];
 const plushEmoji = (task) => PLUSH_EMOJIS[hashStr(task.id) % PLUSH_EMOJIS.length];
+
+/* ---------- accounts & check-in ---------- */
+
+const AVATAR_EMOJIS = ["🐻", "🐰", "🐼", "🦊", "🐷", "🐸", "🦄", "🐙", "🐥", "🐹", "🦁", "🐨", "🐯", "🐵", "🐶", "🐱"];
+
+const FRAMES = [
+  { id: "default", name: "Classic Neon", desc: "The starter frame. Everyone gets one.", demo: "🧸" },
+  { id: "gold", name: "Golden Legend", desc: "Check in 7 days in a row to unlock.", demo: "⭐" },
+];
+
+let selectedAvatar = AVATAR_EMOJIS[0];
+
+function avatarHtml(acc, size) {
+  const cls = acc.equippedFrame === "gold" ? "frame-gold" : "";
+  return `<div class="avatar ${cls}" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.52)}px"><div class="avatar-inner">${acc.avatar}</div></div>`;
+}
+
+function renderAvatarPicker() {
+  const wrap = $("#avatar-picker");
+  wrap.innerHTML = "";
+  for (const emoji of AVATAR_EMOJIS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "av-btn" + (emoji === selectedAvatar ? " on" : "");
+    b.textContent = emoji;
+    b.addEventListener("click", () => {
+      selectedAvatar = emoji;
+      renderAvatarPicker();
+    });
+    wrap.appendChild(b);
+  }
+}
+
+function showAccountScreen() {
+  currentAccount = null;
+  state = null;
+  $("#account-screen").classList.remove("hidden");
+  renderAccountScreen();
+}
+
+function hideAccountScreen() {
+  $("#account-screen").classList.add("hidden");
+}
+
+function renderAccountScreen() {
+  const grid = $("#acc-list");
+  grid.innerHTML = "";
+  $("#acc-empty").classList.toggle("hidden", accounts.length > 0);
+  for (const a of accounts) {
+    const ci = a.checkIn || { streak: 0, total: 0 };
+    const card = document.createElement("div");
+    card.className = "acc-card";
+    card.innerHTML = `
+      ${avatarHtml(a, 64)}
+      <div class="acc-name">${esc(a.username)}</div>
+      <div class="acc-meta">🔥 ${ci.streak} day streak · ${ci.total} check-ins</div>`;
+    card.addEventListener("click", () => selectAccount(a.id));
+    const del = document.createElement("button");
+    del.className = "acc-del";
+    del.textContent = "✕";
+    del.title = "Delete player";
+    del.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteAccount(a.id);
+    });
+    card.appendChild(del);
+    grid.appendChild(card);
+  }
+}
+
+function createAccount() {
+  const name = $("#acc-name").value.trim();
+  if (!name) {
+    toast("Pick a name first!");
+    playSound("fail");
+    return;
+  }
+  if (name.length > 16) {
+    toast("Name too long — max 16 characters.");
+    playSound("fail");
+    return;
+  }
+  if (accounts.some((a) => a.username.toLowerCase() === name.toLowerCase())) {
+    toast("That name is already taken!");
+    playSound("fail");
+    return;
+  }
+  const acc = {
+    id: uid(),
+    username: name,
+    avatar: selectedAvatar,
+    createdAt: Date.now(),
+    equippedFrame: "default",
+    frames: ["default"],
+    checkIn: { lastDate: null, streak: 0, total: 0, history: [] },
+  };
+  accounts.push(acc);
+  saveAccounts();
+  if (accounts.length === 1) migrateLegacy(acc.id);
+  selectAccount(acc.id);
+  toast(`👋 Welcome, ${name}!`);
+}
+
+function selectAccount(id) {
+  const acc = accounts.find((a) => a.id === id);
+  if (!acc) return;
+  currentAccount = acc;
+  state = loadState(acc.id);
+  saveSession(acc.id);
+  hideAccountScreen();
+  renderAll();
+  switchView("tasks");
+  log(`👋 Player "${acc.username}" plugged in.`);
+}
+
+function deleteAccount(id) {
+  const acc = accounts.find((a) => a.id === id);
+  if (!acc) return;
+  if (!confirm(`Delete player "${acc.username}"? All their tasks and progress will be gone forever.`)) return;
+  accounts = accounts.filter((a) => a.id !== id);
+  try {
+    localStorage.removeItem(stateKey(id));
+  } catch (e) {}
+  saveAccounts();
+  if (currentAccount && currentAccount.id === id) {
+    saveSession(null);
+    showAccountScreen();
+  } else {
+    renderAccountScreen();
+  }
+}
+
+function logout() {
+  saveSession(null);
+  showAccountScreen();
+}
+
+/* ---------- daily check-in ---------- */
+
+function doCheckIn() {
+  if (!currentAccount || !state) return;
+  const ci = currentAccount.checkIn;
+  const today = todayStr();
+  if (ci.lastDate === today) {
+    toast("Already checked in today! Come back tomorrow. ⏰");
+    return;
+  }
+
+  ci.streak = ci.lastDate === yesterdayStr() ? ci.streak + 1 : 1;
+  ci.lastDate = today;
+  ci.total++;
+  ci.history.push(today);
+  if (ci.history.length > 90) ci.history = ci.history.slice(-90);
+
+  state.coins += 2; // daily bonus — feeds the machine
+  let unlocked = false;
+  if (ci.streak >= 7 && !currentAccount.frames.includes("gold")) {
+    currentAccount.frames.push("gold");
+    currentAccount.equippedFrame = "gold";
+    unlocked = true;
+  }
+  saveAccounts();
+  saveState();
+  renderAll();
+  if (unlocked) {
+    confetti(160);
+    playSound("fanfare");
+    toast("⭐ 7-day streak! GOLDEN LEGEND avatar frame unlocked!");
+    log(`⭐ ${currentAccount.username} unlocked the Golden Legend frame!`);
+  } else {
+    confetti(50);
+    playSound("win");
+    toast(`✅ Checked in! +2 coins · 🔥 ${ci.streak}-day streak`);
+  }
+}
+
+function equipFrame(frameId) {
+  if (!currentAccount || !currentAccount.frames.includes(frameId)) return;
+  currentAccount.equippedFrame = frameId;
+  saveAccounts();
+  renderAll();
+  playSound("coin");
+  toast(frameId === "gold" ? "⭐ Golden Legend frame equipped!" : "Classic Neon frame equipped.");
+}
+
+/* ---------- profile ---------- */
+
+function renderPlayerChip() {
+  const chip = $("#player-chip");
+  if (!currentAccount) {
+    chip.classList.add("hidden");
+    return;
+  }
+  chip.classList.remove("hidden");
+  $("#chip-avatar").innerHTML = avatarHtml(currentAccount, 40);
+  $("#chip-name").textContent = currentAccount.username;
+}
+
+function renderProfile() {
+  if (!currentAccount) return;
+  const a = currentAccount;
+  const ci = a.checkIn;
+  const today = todayStr();
+
+  $("#pf-avatar-wrap").innerHTML = avatarHtml(a, 96);
+  $("#pf-name").textContent = a.username;
+  $("#pf-joined").textContent = "Member since " + new Date(a.createdAt).toLocaleDateString();
+  $("#pf-streak").textContent = ci.streak;
+  $("#pf-total").textContent = ci.total;
+  $("#pf-coins").textContent = state ? state.coins : 0;
+
+  // last 7 days strip
+  const strip = $("#ci-strip");
+  strip.innerHTML = "";
+  const now = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const ds = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+    const checked = ci.history.includes(ds);
+    const isToday = i === 0;
+    const el = document.createElement("div");
+    el.className = "ci-day" + (checked ? " checked" : "") + (isToday ? " today" : "");
+    el.textContent = checked ? "✓" : isToday ? "•" : "";
+    el.title = ds;
+    strip.appendChild(el);
+  }
+
+  // progress toward the golden frame
+  const goldOwned = a.frames.includes("gold");
+  $("#ci-progress").textContent = goldOwned
+    ? "⭐ Golden Legend frame unlocked — keep the streak alive!"
+    : ci.streak === 0
+      ? "Check in today to start your streak! 7 days in a row unlocks the Golden Legend frame."
+      : `🔥 ${Math.min(ci.streak, 7)}/7 days — ${7 - ci.streak} more day${7 - ci.streak > 1 ? "s" : ""} until the Golden Legend frame!`;
+
+  // check-in button
+  const btn = $("#btn-checkin");
+  const doneToday = ci.lastDate === today;
+  btn.disabled = doneToday;
+  btn.textContent = doneToday ? "✓ Checked in today" : "📅 Check in! (+2 coins)";
+
+  // frame showcase
+  const list = $("#frames-list");
+  list.innerHTML = "";
+  for (const f of FRAMES) {
+    const owned = a.frames.includes(f.id);
+    const equipped = a.equippedFrame === f.id;
+    const card = document.createElement("div");
+    card.className = "frame-card" + (owned ? " owned" : "") + (equipped ? " equipped" : "") + (owned && !equipped ? " clickable" : "");
+    card.innerHTML = `
+      <span class="frame-demo">${avatarHtml({ avatar: f.demo, equippedFrame: f.id }, 56)}</span>
+      <div class="frame-name">${f.name}</div>
+      <div class="frame-desc">${f.desc}</div>
+      <span class="frame-tag">${owned ? (equipped ? "✓ EQUIPPED" : "Equip") : "🔒 Locked"}</span>`;
+    if (owned && !equipped) {
+      card.addEventListener("click", () => equipFrame(f.id));
+    }
+    list.appendChild(card);
+  }
+}
+
 
 /* ---------- views / tabs ---------- */
 
@@ -145,12 +456,15 @@ function renderDone() {
 }
 
 function renderAll() {
+  if (!currentAccount || !state) return;
+  renderPlayerChip();
   renderStats();
   renderTasks();
   renderNowPlaying();
   renderDone();
   renderPrizes();
   renderLocker();
+  renderProfile();
   updateMachineStatus();
   if (currentView === "arcade") layoutMachine();
 }
@@ -341,7 +655,7 @@ function setBusy(busy) {
 }
 
 async function play() {
-  if (gameBusy) return;
+  if (gameBusy || !currentAccount || !state) return;
   const todos = state.tasks.filter((t) => t.status === "todo");
   if (todos.length === 0) {
     toast("The machine is empty! Add a task first.");
@@ -444,7 +758,7 @@ $("#btn-right").addEventListener("click", () => moveClaw(30));
 $("#btn-drop").addEventListener("click", play);
 
 document.addEventListener("keydown", (e) => {
-  if (currentView !== "arcade") return;
+  if (currentView !== "arcade" || !currentAccount) return;
   if (e.target.matches("input, textarea")) return;
   if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") { e.preventDefault(); moveClaw(-16); }
   else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") { e.preventDefault(); moveClaw(16); }
@@ -637,8 +951,30 @@ function loopConfetti() {
 
 /* ---------- init ---------- */
 
-log("🕹️ Machine online. Add tasks, then come play!");
-log("Tip: line up the claw over a plushie you like.");
+function init() {
+  log("🕹️ Machine online. Add tasks, then come play!");
+  log("Tip: line up the claw over a plushie you like.");
 
-renderAll();
-switchView("tasks");
+  $("#btn-switch").addEventListener("click", logout);
+  $("#player-chip").addEventListener("click", () => switchView("profile"));
+  $("#btn-checkin").addEventListener("click", doCheckIn);
+  $("#btn-create-acc").addEventListener("click", createAccount);
+  $("#acc-name").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") createAccount();
+  });
+  renderAvatarPicker();
+
+  const sessionId = loadSession();
+  const acc = sessionId ? accounts.find((a) => a.id === sessionId) : null;
+  if (acc) {
+    currentAccount = acc;
+    state = loadState(acc.id);
+    hideAccountScreen();
+    renderAll();
+    switchView("tasks");
+  } else {
+    showAccountScreen();
+  }
+}
+
+init();

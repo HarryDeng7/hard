@@ -24,7 +24,15 @@
       <button class="tab active" data-view="tasks">📋 Tasks</button>
       <button class="tab" data-view="arcade">🕹️ Arcade</button>
       <button class="tab" data-view="prizes">🏆 Prizes</button>
+      <button class="tab" data-view="profile">👤 Profile</button>
     </nav>
+    <div class="header-user">
+      <button class="player-chip hidden" id="player-chip" title="Open your profile">
+        <span id="chip-avatar"></span>
+        <span class="chip-name" id="chip-name"></span>
+      </button>
+      <button class="btn btn-switch" id="btn-switch" title="Switch player">🔄</button>
+    </div>
   </div>
 </header>
 
@@ -165,7 +173,65 @@
     </div>
   </section>
 
+  <!-- ================= PROFILE ================= -->
+  <section id="view-profile" class="view">
+    <div class="profile-layout">
+      <div class="panel profile-card">
+        <div id="pf-avatar-wrap"></div>
+        <div class="pf-name" id="pf-name">—</div>
+        <div class="pf-joined muted" id="pf-joined">—</div>
+        <div class="pf-stats">
+          <div class="pf-stat"><b id="pf-streak">0</b><span>🔥 check-in streak</span></div>
+          <div class="pf-stat"><b id="pf-total">0</b><span>📅 check-ins</span></div>
+          <div class="pf-stat"><b id="pf-coins">0</b><span>🪙 coins</span></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2 class="panel-title">📅 Daily check-in</h2>
+        <div class="ci-strip" id="ci-strip"></div>
+        <div class="ci-caption">last 7 days</div>
+        <div class="ci-progress" id="ci-progress"></div>
+        <button class="btn btn-primary btn-checkin" id="btn-checkin">📅 Check in! (+2 coins)</button>
+        <p class="muted ci-note">Check in once per day. 7 days in a row unlocks the <strong>Golden Legend</strong> avatar frame — and every check-in pays <strong>+2 coins</strong> for the claw machine.</p>
+      </div>
+      <div class="panel">
+        <h2 class="panel-title">📖 How the check-in works</h2>
+        <ol class="ci-how">
+          <li><b>Once a day.</b> Every day you open the arcade, hit <b>Check in</b>. One check-in per day — the button locks itself once you're done.</li>
+          <li><b>Streaks build up.</b> Each check-in grows your streak (🔥). Miss a day and the streak resets to 1 — no mercy, just like a real arcade.</li>
+          <li><b>Coins every day.</b> Every check-in pays <b>+2 coins</b> for the claw machine, so the machine never runs dry.</li>
+          <li><b>The golden prize.</b> Check in <b>7 days in a row</b> and the <b>Golden Legend</b> avatar frame is yours — confetti included.</li>
+          <li><b>Frames are forever.</b> Once unlocked, the frame stays in your locker. Equip or swap it anytime in the Avatar frames section below.</li>
+        </ol>
+        <p class="muted ci-note">The 7 circles above are your last 7 days. Streaks are per player — every account races for its own golden frame.</p>
+      </div>
+      <div class="panel">
+        <h2 class="panel-title">🖼️ Avatar frames</h2>
+        <div class="frames-list" id="frames-list"></div>
+      </div>
+    </div>
+  </section>
+
 </main>
+
+<!-- ================= ACCOUNT SCREEN ================= -->
+<div id="account-screen" class="account-screen hidden">
+  <div class="acc-box">
+    <div class="acc-logo">🕹️</div>
+    <h2 class="acc-title">HARD WORKERS' ARCADE</h2>
+    <p class="acc-sub">Insert coin. Choose your player.<br>Daily check-ins unlock exclusive avatar frames ⭐</p>
+    <div class="acc-list" id="acc-list"></div>
+    <div id="acc-empty" class="empty-state">No players yet — create the first one below!</div>
+    <div class="acc-create">
+      <h3>🆕 NEW PLAYER</h3>
+      <div class="acc-create-row">
+        <input type="text" id="acc-name" class="text-input" placeholder="Player name" maxlength="16" autocomplete="off">
+        <button type="button" class="btn btn-primary" id="btn-create-acc">Start!</button>
+      </div>
+      <div class="avatar-picker" id="avatar-picker"></div>
+    </div>
+  </div>
+</div>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 

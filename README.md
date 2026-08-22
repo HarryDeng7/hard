@@ -9,8 +9,23 @@ Turn your to-do list into an arcade. Every task you add becomes a plushie inside
 3. **Finish the task** → confetti, retro sound effects, coins + tickets, and a daily streak 🔥
 4. **Hit the Prize Wall** → trade tickets for legendary prizes (Tootsie Roll, Golden Claw Trophy, Champion Plushie…) and keep them in your locker
 
+## Daily check-in
+
+Come back once a day, tap **Check in**, and keep the streak alive:
+
+- **One check-in per day** — the button locks itself until tomorrow
+- **Streaks build up** — each check-in grows your 🔥 streak; miss a day and it resets to 1
+- **Coins every day** — every check-in pays **+2 coins** for the claw machine
+- **The golden prize** — check in **7 days in a row** to unlock the **Golden Legend** avatar frame, a rotating golden ring that shows on your avatar everywhere (header, profile, player select)
+- **Frames are forever** — once unlocked, they stay in your locker and can be equipped or swapped anytime
+
+The profile page shows your last 7 days as a strip of circles, so you always know how close the golden frame is.
+
 ## Features
 
+- 👤 Local player accounts — each player keeps their own tasks, coins, tickets and prizes
+- 📅 Daily check-in — 7 days in a row unlocks the **Golden Legend** avatar frame; every check-in pays +2 coins
+- 🖼️ Equippable avatar frames (Classic Neon + animated Golden Legend)
 - 🗂️ Add / complete / delete tasks with 1–3 star difficulty
 - 🧸 Working claw machine: aim matters, and yes — sometimes the claw "slips"
 - 🪙 Coin economy: complete tasks to earn more plays (3–9 coins per task)
