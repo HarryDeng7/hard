@@ -1142,9 +1142,9 @@ function loopConfetti() {
 const RUNNER_COST = 100; // tickets per run
 const RUNNER_TIME = 300; // 5-minute limit per level
 const RUNNER_CHAPTERS = [
-  { id: "snow", name: "Snow Mountain", emoji: "❄️", frame: "snow", goal: [400, 650, 950] },
-  { id: "desert", name: "Scorching Desert", emoji: "🏜️", frame: "desert", goal: [450, 700, 1000] },
-  { id: "volcano", name: "Burning Volcano", emoji: "🌋", frame: "volcano", goal: [500, 750, 1050] },
+  { id: "snow", name: "Snow Mountain", emoji: "❄️", frame: "snow", goal: [10000, 16000, 22000] },
+  { id: "desert", name: "Scorching Desert", emoji: "🏜️", frame: "desert", goal: [11000, 17000, 24000] },
+  { id: "volcano", name: "Burning Volcano", emoji: "🌋", frame: "volcano", goal: [12000, 18000, 26000] },
 ];
 const RUNNER_THEMES = {
   snow: {
