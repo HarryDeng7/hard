@@ -21,6 +21,7 @@ const defaultState = () => ({
   lastDoneDate: null,
   prizes: [],           // claimed prize ids
   pickedId: null,
+  runner: { snow: 0, desert: 0, volcano: 0 }, // completed levels per Runner chapter
 });
 
 let accounts = loadAccounts(); // [{ id, username, avatar, createdAt, equippedFrame, frames[], checkIn{} }]
@@ -69,6 +70,8 @@ function loadState(id) {
     if (!Array.isArray(st.tasks)) st.tasks = [];
     st.tasks = st.tasks.filter((t) => t && t.id && t.name);
     if (!Array.isArray(st.prizes)) st.prizes = [];
+    if (!st.runner || typeof st.runner !== "object") st.runner = {};
+    for (const c of ["snow", "desert", "volcano"]) if (typeof st.runner[c] !== "number") st.runner[c] = 0;
     if (st.pickedId && !st.tasks.some((t) => t.id === st.pickedId)) st.pickedId = null;
     return st;
   } catch (e) {
@@ -127,14 +130,42 @@ const plushEmoji = (task) => PLUSH_EMOJIS[hashStr(task.id) % PLUSH_EMOJIS.length
 const AVATAR_EMOJIS = ["🐻", "🐰", "🐼", "🦊", "🐷", "🐸", "🦄", "🐙", "🐥", "🐹", "🦁", "🐨", "🐯", "🐵", "🐶", "🐱"];
 
 const FRAMES = [
-  { id: "default", name: "Classic Neon", desc: "The starter frame. Everyone gets one.", demo: "🧸" },
-  { id: "gold", name: "Golden Legend", desc: "Check in 7 days in a row to unlock.", demo: "⭐" },
+  { id: "default", name: "Classic Neon", desc: "The starter frame. Everyone gets one.", demo: "🧸", source: "starter" },
+  { id: "gold", name: "Golden Legend", desc: "Check in 7 days in a row to unlock.", demo: "⭐", source: "checkin" },
+  { id: "pink", name: "Candy Pink", desc: "Sweet, loud and proud.", demo: "🍭", source: "loot" },
+  { id: "ice", name: "Ice Crystal", desc: "Cool as the other side of the machine.", demo: "🧊", source: "loot" },
+  { id: "toxic", name: "Toxic Green", desc: "Glows in the dark. Probably.", demo: "🧪", source: "loot" },
+  { id: "magma", name: "Magma", desc: "Straight from the coin slot.", demo: "🌋", source: "loot" },
+  { id: "prism", name: "Prism Rainbow", desc: "All the colors, none of the physics.", demo: "🌈", source: "loot" },
+  { id: "cyber", name: "Cyber Grid", desc: "Dashed dreams in neon.", demo: "🕹️", source: "loot" },
+  { id: "nightmare", name: "Nightmare", desc: "For 3 AM task sessions.", demo: "👻", source: "loot" },
+  { id: "chrome", name: "Chrome", desc: "Shiny. Untouchable.", demo: "🥇", source: "loot" },
+  { id: "snow", name: "Snow Summit", desc: "Clear the Snow Mountain chapter in the Runner.", demo: "❄️", source: "runner" },
+  { id: "desert", name: "Desert Storm", desc: "Clear the Scorching Desert chapter in the Runner.", demo: "🏜️", source: "runner" },
+  { id: "volcano", name: "Volcano Ace", desc: "Clear the Burning Volcano chapter in the Runner.", demo: "🌋", source: "runner" },
+];
+
+const TAGS = [
+  { id: "classic", name: "Classic White", desc: "The starter tag. Crisp and clean.", demo: "⬜", source: "starter" },
+  { id: "gold", name: "Gold Glow", desc: "Midas would be proud.", demo: "✨", source: "loot" },
+  { id: "pink", name: "Pink Pop", desc: "Bubblegum energy.", demo: "🩷", source: "loot" },
+  { id: "ice", name: "Ice Blue", desc: "Cold. Frozen. Unstoppable.", demo: "❄️", source: "loot" },
+  { id: "fire", name: "Fire Red", desc: "For hot streaks only.", demo: "🔥", source: "loot" },
+  { id: "toxic", name: "Toxic Purple", desc: "Caution: high productivity.", demo: "☣️", source: "loot" },
+  { id: "rainbow", name: "Rainbow Text", desc: "The rarest tag in the machine.", demo: "🌈", source: "loot" },
+];
+
+/* what the Prize Claw stocks — always visible, grab the one you aim at */
+const MACHINE_STOCK = [
+  ...FRAMES.filter((f) => f.source === "loot").map((f) => ({ kind: "frame", id: f.id, name: f.name, demo: f.demo })),
+  ...TAGS.filter((t) => t.source === "loot").map((t) => ({ kind: "tag", id: t.id, name: t.name })),
 ];
 
 let selectedAvatar = AVATAR_EMOJIS[0];
 
 function avatarHtml(acc, size) {
-  const cls = acc.equippedFrame === "gold" ? "frame-gold" : "";
+  const f = acc.equippedFrame;
+  const cls = f && f !== "default" ? "frame-" + f : "";
   return `<div class="avatar ${cls}" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.52)}px"><div class="avatar-inner">${acc.avatar}</div></div>`;
 }
 
@@ -171,11 +202,12 @@ function renderAccountScreen() {
   $("#acc-empty").classList.toggle("hidden", accounts.length > 0);
   for (const a of accounts) {
     const ci = a.checkIn || { streak: 0, total: 0 };
+    const equippedTag = a.equippedTag || "classic";
     const card = document.createElement("div");
     card.className = "acc-card";
     card.innerHTML = `
       ${avatarHtml(a, 64)}
-      <div class="acc-name">${esc(a.username)}</div>
+      <div class="acc-name tag-${equippedTag}">${esc(a.username)}</div>
       <div class="acc-meta">🔥 ${ci.streak} day streak · ${ci.total} check-ins</div>`;
     card.addEventListener("click", () => selectAccount(a.id));
     const del = document.createElement("button");
@@ -195,17 +227,17 @@ function createAccount() {
   const name = $("#acc-name").value.trim();
   if (!name) {
     toast("Pick a name first!");
-    playSound("fail");
+    playSound.fail();
     return;
   }
   if (name.length > 16) {
     toast("Name too long — max 16 characters.");
-    playSound("fail");
+    playSound.fail();
     return;
   }
   if (accounts.some((a) => a.username.toLowerCase() === name.toLowerCase())) {
     toast("That name is already taken!");
-    playSound("fail");
+    playSound.fail();
     return;
   }
   const acc = {
@@ -215,6 +247,8 @@ function createAccount() {
     createdAt: Date.now(),
     equippedFrame: "default",
     frames: ["default"],
+    equippedTag: "classic",
+    tags: ["classic"],
     checkIn: { lastDate: null, streak: 0, total: 0, history: [] },
   };
   accounts.push(acc);
@@ -255,6 +289,11 @@ function deleteAccount(id) {
 
 function logout() {
   saveSession(null);
+  if (runnerState === "running" || r) {
+    cancelAnimationFrame(rRaf);
+    runnerState = "idle";
+    r = null;
+  }
   showAccountScreen();
 }
 
@@ -287,12 +326,12 @@ function doCheckIn() {
   renderAll();
   if (unlocked) {
     confetti(160);
-    playSound("fanfare");
+    playSound.fanfare();
     toast("⭐ 7-day streak! GOLDEN LEGEND avatar frame unlocked!");
     log(`⭐ ${currentAccount.username} unlocked the Golden Legend frame!`);
   } else {
     confetti(50);
-    playSound("win");
+    playSound.win();
     toast(`✅ Checked in! +2 coins · 🔥 ${ci.streak}-day streak`);
   }
 }
@@ -302,8 +341,19 @@ function equipFrame(frameId) {
   currentAccount.equippedFrame = frameId;
   saveAccounts();
   renderAll();
-  playSound("coin");
-  toast(frameId === "gold" ? "⭐ Golden Legend frame equipped!" : "Classic Neon frame equipped.");
+  playSound.coin();
+  const f = FRAMES.find((x) => x.id === frameId);
+  toast(f ? `${f.name} frame equipped!` : "Frame equipped!");
+}
+
+function equipTag(tagId) {
+  if (!currentAccount || !currentAccount.tags.includes(tagId)) return;
+  currentAccount.equippedTag = tagId;
+  saveAccounts();
+  renderAll();
+  playSound.coin();
+  const f = TAGS.find((x) => x.id === tagId);
+  toast(f ? `${f.name} tag equipped!` : "Tag equipped!");
 }
 
 /* ---------- profile ---------- */
@@ -317,6 +367,7 @@ function renderPlayerChip() {
   chip.classList.remove("hidden");
   $("#chip-avatar").innerHTML = avatarHtml(currentAccount, 40);
   $("#chip-name").textContent = currentAccount.username;
+  $("#chip-name").className = "chip-name tag-" + (currentAccount.equippedTag || "classic");
 }
 
 function renderProfile() {
@@ -327,6 +378,7 @@ function renderProfile() {
 
   $("#pf-avatar-wrap").innerHTML = avatarHtml(a, 96);
   $("#pf-name").textContent = a.username;
+  $("#pf-name").className = "pf-name tag-" + (a.equippedTag || "classic");
   $("#pf-joined").textContent = "Member since " + new Date(a.createdAt).toLocaleDateString();
   $("#pf-streak").textContent = ci.streak;
   $("#pf-total").textContent = ci.total;
@@ -366,8 +418,9 @@ function renderProfile() {
   // frame showcase
   const list = $("#frames-list");
   list.innerHTML = "";
+  const frames = a.frames || ["default"];
   for (const f of FRAMES) {
-    const owned = a.frames.includes(f.id);
+    const owned = frames.includes(f.id);
     const equipped = a.equippedFrame === f.id;
     const card = document.createElement("div");
     card.className = "frame-card" + (owned ? " owned" : "") + (equipped ? " equipped" : "") + (owned && !equipped ? " clickable" : "");
@@ -375,11 +428,32 @@ function renderProfile() {
       <span class="frame-demo">${avatarHtml({ avatar: f.demo, equippedFrame: f.id }, 56)}</span>
       <div class="frame-name">${f.name}</div>
       <div class="frame-desc">${f.desc}</div>
-      <span class="frame-tag">${owned ? (equipped ? "✓ EQUIPPED" : "Equip") : "🔒 Locked"}</span>`;
+      <span class="frame-tag">${owned ? (equipped ? "✓ EQUIPPED" : "Equip") : f.source === "checkin" ? "🔒 Check in 7 days" : f.source === "loot" ? "🎁 Prize Claw" : f.source === "runner" ? "🏃 Runner chapter" : "🔒 Locked"}</span>`;
     if (owned && !equipped) {
       card.addEventListener("click", () => equipFrame(f.id));
     }
     list.appendChild(card);
+  }
+
+  // name tag showcase
+  const tlist = $("#tags-list");
+  tlist.innerHTML = "";
+  const tags = a.tags || ["classic"];
+  const equippedTag = a.equippedTag || "classic";
+  for (const f of TAGS) {
+    const owned = tags.includes(f.id);
+    const equipped = equippedTag === f.id;
+    const card = document.createElement("div");
+    card.className = "frame-card" + (owned ? " owned" : "") + (equipped ? " equipped" : "") + (owned && !equipped ? " clickable" : "");
+    card.innerHTML = `
+      <span class="tag-demo tag-${f.id}">Aa</span>
+      <div class="frame-name">${f.name}</div>
+      <div class="frame-desc">${f.desc}</div>
+      <span class="frame-tag">${owned ? (equipped ? "✓ EQUIPPED" : "Equip") : f.source === "loot" ? "🎁 Prize Claw" : "🔒 Locked"}</span>`;
+    if (owned && !equipped) {
+      card.addEventListener("click", () => equipTag(f.id));
+    }
+    tlist.appendChild(card);
   }
 }
 
@@ -415,7 +489,7 @@ function renderNowPlaying() {
   card.classList.remove("hidden");
   $("#np-emoji").textContent = plushEmoji(t);
   $("#np-name").textContent = `"${t.name}"`;
-  $("#np-meta").textContent = "★".repeat(t.stars) + " · grabbed by the claw — go finish it!";
+  $("#np-meta").textContent = (t.stars ? "★".repeat(t.stars) + " · " : "") + "grabbed by the claw — go finish it!";
 }
 
 function renderTasks() {
@@ -466,6 +540,7 @@ function renderAll() {
   renderLocker();
   renderProfile();
   updateMachineStatus();
+  renderRunner();
   if (currentView === "arcade") layoutMachine();
 }
 
@@ -473,9 +548,10 @@ function renderAll() {
 
 let selectedStars = 1;
 const STAR_HINTS = {
-  1: "easy — 3 coins · 25 tickets",
-  2: "medium — 6 coins · 50 tickets",
-  3: "hard — 9 coins · 75 tickets",
+  0: "no sweat — 1 coin",
+  1: "easy — 2 coins · 25 tickets",
+  2: "medium — 3 coins · 50 tickets",
+  3: "hard — 4 coins · 75 tickets",
 };
 
 function setStars(n) {
@@ -496,7 +572,7 @@ $("#add-task-form").addEventListener("submit", (e) => {
   input.focus();
   saveState();
   renderAll();
-  playSound("coin");
+  playSound.coin();
   toast("🧸 Added to the machine!");
   log(`➕ Added "${name}" to the machine`);
 });
@@ -506,7 +582,7 @@ function completeTask(id) {
   if (!t || t.status === "done") return;
   t.status = "done";
   t.completedAt = Date.now();
-  const coins = t.stars * 3;
+  const coins = t.stars + 1; // 0★ = 1 coin, every extra star adds 1 more
   const tickets = t.stars * 25;
   state.coins += coins;
   state.tickets += tickets;
@@ -519,10 +595,11 @@ function completeTask(id) {
 
   saveState();
   renderAll();
-  playSound("fanfare");
+  playSound.fanfare();
   confetti(130);
-  toast(`✅ "${t.name}" done! +${coins} coins · +${tickets} tickets 🔥`);
-  log(`✅ Completed "${t.name}" (+${coins}🪙 +${tickets}🎟️)`);
+  const tix = tickets > 0 ? ` · +${tickets} tickets` : "";
+  toast(`✅ "${t.name}" done! +${coins} coins${tix} 🔥`);
+  log(`✅ Completed "${t.name}" (+${coins}🪙${tickets > 0 ? ` +${tickets}🎟️` : ""})`);
 }
 
 function deleteTask(id) {
@@ -566,6 +643,9 @@ const PILE_BOTTOM = () => glassH - 42;
 const CLAW_DROP_Y = () => PILE_BOTTOM() - 80;
 const CHUTE_X = () => Math.min(CLAW_MAX(), glassW - 70);
 const MAX_PLUSHIES = 14; // machine is small — it gets stuffed
+const PRIZE_COST = 2; // coins only — the claw machine never takes tickets
+
+let machineMode = "task"; // 'task' | 'prize'
 
 function positionClaw() {
   claw.style.left = clawX + "px";
@@ -578,6 +658,31 @@ function setClawX(x) {
 
 function positionPlushies() {
   pile.innerHTML = "";
+  if (machineMode === "prize") {
+    const cols = Math.max(3, Math.min(7, Math.floor((glassW - 24) / 58)));
+    MACHINE_STOCK.forEach((item, i) => {
+      const h = hashStr(item.kind + item.id);
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const x = 30 + col * 58 + ((h % 12) - 6);
+      const y = Math.max(PILE_TOP(), PILE_BOTTOM() - row * 50 - ((h % 10) - 4));
+      const el = document.createElement("div");
+      el.className = "plushie " + (item.kind === "frame" ? "prize-frame" : "prize-tag");
+      el.dataset.kind = item.kind;
+      el.dataset.id = item.id;
+      const rot = (h % 24) - 12;
+      el.style.setProperty("--rot", rot + "deg");
+      el.style.setProperty("--i", i);
+      el.style.left = x + "px";
+      el.style.top = y + "px";
+      el.title = item.name;
+      el.innerHTML = item.kind === "frame"
+        ? avatarHtml({ avatar: item.demo, equippedFrame: item.id }, 42)
+        : `<span class="prize-tag-sample tag-${item.id}">Aa</span>`;
+      pile.appendChild(el);
+    });
+    return;
+  }
   const todos = state.tasks.filter((t) => t.status === "todo").slice(0, MAX_PLUSHIES);
   const cols = Math.max(3, Math.min(7, Math.floor((glassW - 24) / 58)));
   todos.forEach((t, i) => {
@@ -601,9 +706,19 @@ function positionPlushies() {
 }
 
 function updateMachineStatus() {
-  const todos = state.tasks.filter((t) => t.status === "todo");
+  if (!currentAccount || !state) return;
   const el = $("#machine-status");
   el.className = "machine-status";
+  if (machineMode === "prize") {
+    if (state.coins < PRIZE_COST) {
+      el.textContent = "Out of coins! Finish tasks or check in to earn more.";
+      el.classList.add("warn");
+    } else {
+      el.textContent = `${MACHINE_STOCK.length} prizes stocked · ${PRIZE_COST} coins per play`;
+    }
+    return;
+  }
+  const todos = state.tasks.filter((t) => t.status === "todo");
   if (state.coins < 1) {
     el.textContent = "Out of coins! Finish a task to earn more.";
     el.classList.add("warn");
@@ -656,79 +771,100 @@ function setBusy(busy) {
 
 async function play() {
   if (gameBusy || !currentAccount || !state) return;
-  const todos = state.tasks.filter((t) => t.status === "todo");
-  if (todos.length === 0) {
-    toast("The machine is empty! Add a task first.");
-    playSound("fail");
-    return;
+  const cost = machineMode === "prize" ? PRIZE_COST : 1;
+  if (machineMode === "task") {
+    const todos = state.tasks.filter((t) => t.status === "todo");
+    if (todos.length === 0) {
+      toast("The machine is empty! Add a task first.");
+      playSound.fail();
+      return;
+    }
   }
-  if (state.coins < 1) {
-    toast("Out of coins! Finish a task to earn more.");
-    playSound("fail");
+  if (state.coins < cost) {
+    toast("Out of coins! Finish tasks or check in to earn more.");
+    playSound.fail();
     shakeMachine();
     return;
   }
 
-  state.coins--;
+  state.coins -= cost;
   saveState();
   renderStats();
   updateMachineStatus();
-  playSound("coin");
-  log("🪙 Play! (−1 coin)");
+  playSound.coin();
+  log(`🪙 Play! (−${cost} coin${cost > 1 ? "s" : ""})`);
   setBusy(true);
 
-  // 1. descend
-  claw.classList.remove("rising", "missed");
-  claw.style.top = CLAW_DROP_Y() + "px";
-  playSound("drop");
-  await wait(850);
+  try {
+    // 1. descend
+    claw.classList.remove("rising", "missed");
+    claw.style.top = CLAW_DROP_Y() + "px";
+    playSound.drop();
+    await wait(850);
 
-  // 2. grab attempt
-  const target = pickTarget();
-  const success = target && Math.random() < target.prob;
-  if (success) {
-    claw.classList.add("closed", "grab-snap");
-    clawPrize.textContent = plushEmoji(target.task);
-    clawPrize.classList.add("show");
-    target.el.classList.add("grabbed");
-    playSound("grab");
-    await wait(400);
-  } else {
-    await wait(400);
-  }
-
-  // 3. ascend
-  claw.classList.add("rising");
-  claw.style.top = CLAW_TOP + "px";
-  await wait(850);
-  claw.classList.remove("closed", "grab-snap");
-
-  if (success) {
-    // 4. carry to the chute and drop it
-    setClawX(CHUTE_X());
-    await wait(650);
-    clawPrize.classList.remove("show");
-    target.el.remove();
-    chute.classList.add("flash");
-    playSound("coin");
-    setTimeout(() => chute.classList.remove("flash"), 900);
-    pickTask(target.task.id);
-  } else {
-    claw.classList.add("missed");
-    playSound("fail");
+    // 2. grab attempt
+    const target = pickTarget();
+    let success = false;
     if (target) {
-      target.el.classList.add("whew");
-      const msg = target.dist <= 55 ? "😿 SO CLOSE! The claw slipped..." : "😿 Not even close...";
-      toast(msg);
-      log(msg);
-    } else {
-      toast("😿 The claw came up empty.");
-      log("😿 The claw came up empty.");
+      const prob = machineMode === "prize"
+        ? (target.dist <= 26 ? 0.85 : target.dist <= 55 ? 0.5 : 0.1)
+        : target.prob;
+      success = Math.random() < prob;
     }
-    await wait(500);
-  }
+    if (success) {
+      claw.classList.add("closed", "grab-snap");
+      clawPrize.textContent = machineMode === "prize"
+        ? (target.el.dataset.kind === "tag" ? "🏷️" : (MACHINE_STOCK.find((s) => s.kind === "frame" && s.id === target.el.dataset.id) || {}).demo || "🎁")
+        : plushEmoji(target.task);
+      clawPrize.classList.add("show");
+      target.el.classList.add("grabbed");
+      playSound.grab();
+      await wait(400);
+    } else {
+      await wait(400);
+    }
 
-  setBusy(false);
+    // 3. ascend
+    claw.classList.add("rising");
+    claw.style.top = CLAW_TOP + "px";
+    await wait(850);
+    claw.classList.remove("closed", "grab-snap");
+
+    if (success) {
+      // 4. carry to the chute and drop it
+      setClawX(CHUTE_X());
+      await wait(650);
+      clawPrize.classList.remove("show");
+      target.el.remove();
+      chute.classList.add("flash");
+      playSound.coin();
+      setTimeout(() => chute.classList.remove("flash"), 900);
+      if (machineMode === "prize") awardCosmetic(target.el.dataset.kind, target.el.dataset.id);
+      else pickTask(target.task.id);
+    } else {
+      claw.classList.add("missed");
+      playSound.fail();
+      if (target) {
+        target.el.classList.add("whew");
+        const msg = target.dist <= 55 ? "😿 SO CLOSE! The claw slipped..." : "😿 Not even close...";
+        toast(msg);
+        log(msg);
+      } else {
+        toast("😿 The claw came up empty.");
+        log("😿 The claw came up empty.");
+      }
+      await wait(500);
+    }
+  } catch (err) {
+    console.error("claw error:", err);
+    toast("😿 The claw jammed — try again.");
+    playSound.fail();
+  } finally {
+    setBusy(false);
+    claw.classList.remove("rising", "missed", "closed", "grab-snap");
+    claw.style.top = CLAW_TOP + "px";
+    clawPrize.classList.remove("show");
+  }
 }
 
 function pickTask(id) {
@@ -741,16 +877,67 @@ function pickTask(id) {
   if (t) t.status = "picked";
   saveState();
   renderAll();
-  playSound("win");
+  playSound.win();
   confetti(70);
   toast(`🎯 NICE CATCH! Next task: "${t.name}"`);
   log(`🧸 Grabbed "${t.name}" — it's your next task!`);
 }
 
+/* ---------- prize claw ---------- */
+
+function awardCosmetic(kind, id) {
+  const item = MACHINE_STOCK.find((s) => s.kind === kind && s.id === id);
+  if (!item) return;
+  const owned = kind === "frame"
+    ? currentAccount.frames.includes(id)
+    : (currentAccount.tags || []).includes(id);
+  if (owned) {
+    state.tickets += 30; // classic arcade: duplicates pay out in tickets
+    saveState();
+    renderAll();
+    playSound.coin();
+    toast(`🎁 Duplicate: ${item.name}! +30 tickets. Classic arcade.`);
+    log(`🎁 Duplicate ${item.name} → +30 tickets`);
+    return;
+  }
+  if (kind === "frame") {
+    currentAccount.frames.push(id);
+    currentAccount.equippedFrame = id;
+  } else {
+    currentAccount.tags = currentAccount.tags || ["classic"];
+    currentAccount.tags.push(id);
+    currentAccount.equippedTag = id;
+  }
+  saveAccounts();
+  saveState();
+  renderAll();
+  confetti(120);
+  playSound.win();
+  toast(`🎉 Grabbed the ${item.name} ${kind === "frame" ? "avatar frame" : "name tag"}!`);
+  log(`🎁 ${currentAccount.username} grabbed the ${item.name} ${kind}!`);
+}
+
+function setMachineMode(mode) {
+  machineMode = mode;
+  $$(".m-tab").forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
+  $("#machine-title").textContent = mode === "prize" ? "🎁 PRIZE CLAW" : "🧸 TASK CLAW";
+  $("#machine-sub").textContent = mode === "prize" ? "grab a frame. flex. conquer." : "grab a task. commit. conquer.";
+  updateDropLabel();
+  updateMachineStatus();
+  layoutMachine();
+  playSound.coin();
+}
+
+function updateDropLabel() {
+  $("#btn-drop").textContent = machineMode === "prize" ? `⬇ DROP (${PRIZE_COST}🪙)` : "⬇ DROP (1🪙)";
+}
+
+$$(".m-tab").forEach((b) => b.addEventListener("click", () => setMachineMode(b.dataset.mode)));
+
 function moveClaw(dx) {
   if (gameBusy) return;
   setClawX(clawX + dx);
-  playSound("move");
+  playSound.move();
 }
 
 $("#btn-left").addEventListener("click", () => moveClaw(-30));
@@ -759,6 +946,7 @@ $("#btn-drop").addEventListener("click", play);
 
 document.addEventListener("keydown", (e) => {
   if (currentView !== "arcade" || !currentAccount) return;
+  if (runnerState === "running") return; // the Runner owns the keyboard while playing
   if (e.target.matches("input, textarea")) return;
   if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") { e.preventDefault(); moveClaw(-16); }
   else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") { e.preventDefault(); moveClaw(16); }
@@ -829,14 +1017,14 @@ function claimPrize(id) {
   if (!p || state.prizes.includes(id)) return;
   if (state.tickets < p.cost) {
     toast("Not enough tickets yet! 🎟️");
-    playSound("fail");
+    playSound.fail();
     return;
   }
   state.tickets -= p.cost;
   state.prizes.push(id);
   saveState();
   renderAll();
-  playSound("claim");
+  playSound.claim();
   confetti(90);
   toast(`🏆 Claimed the ${p.name}! It's in your locker.`);
   log(`🏆 Traded ${p.cost} tickets for the ${p.name}`);
@@ -949,6 +1137,391 @@ function loopConfetti() {
   else { confettiRaf = null; ctx.clearRect(0, 0, canvas.width, canvas.height); }
 }
 
+/* ---------- runner: 2D side-scroller ---------- */
+
+const RUNNER_COST = 100; // tickets per run
+const RUNNER_TIME = 300; // 5-minute limit per level
+const RUNNER_CHAPTERS = [
+  { id: "snow", name: "Snow Mountain", emoji: "❄️", frame: "snow", goal: [400, 650, 950] },
+  { id: "desert", name: "Scorching Desert", emoji: "🏜️", frame: "desert", goal: [450, 700, 1000] },
+  { id: "volcano", name: "Burning Volcano", emoji: "🌋", frame: "volcano", goal: [500, 750, 1050] },
+];
+const RUNNER_THEMES = {
+  snow: {
+    sky: ["#0b1f3a", "#1d4e8f", "#7ec8f7"], far: "#9ecbe8", near: "#cfe8f5",
+    ground: "#e8f4fb", groundLine: "#9fd3ef", groundDark: "#d3e9f5",
+    obstacle: "#ffffff", obstacle2: "#f97316", part: "#ffffff", scarf: "#ff2d95",
+  },
+  desert: {
+    sky: ["#3a1c0e", "#b45309", "#fbbf24"], far: "#e8a33d", near: "#f5c96b",
+    ground: "#f5d48a", groundLine: "#d99a3d", groundDark: "#eec06e",
+    obstacle: "#3f9d4f", obstacle2: "#256b33", part: "#fde68a", scarf: "#22d3ee",
+  },
+  volcano: {
+    sky: ["#1c0a0a", "#5f1111", "#c2410c"], far: "#7f1d1d", near: "#b91c1c",
+    ground: "#3b1414", groundLine: "#ea580c", groundDark: "#2c0f0f",
+    obstacle: "#292524", obstacle2: "#ea580c", part: "#fdba74", scarf: "#4ade80",
+  },
+};
+
+const rCanvas = $("#runner-canvas");
+const rCtx = rCanvas ? rCanvas.getContext("2d") : null;
+
+let runnerChapter = "snow";
+let runnerState = "idle"; // idle | running | won | lost
+let runnerLevel = 0;
+let r = null;   // live game state
+let rRaf = 0;
+let rLastT = 0;
+let jumpQueued = false;
+
+const fmtTime = (s) => {
+  const m = Math.floor(Math.max(0, s) / 60);
+  const ss = Math.floor(Math.max(0, s) % 60);
+  return `${m}:${String(ss).padStart(2, "0")}`;
+};
+
+function renderRunner() {
+  if (!currentAccount || !state) return;
+  const grid = $("#chapter-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+  for (const ch of RUNNER_CHAPTERS) {
+    const prog = (state.runner || {})[ch.id] || 0;
+    const owned = currentAccount.frames.includes(ch.frame);
+    const card = document.createElement("div");
+    card.className = "ch-card" + (runnerChapter === ch.id ? " active" : "");
+    card.innerHTML = `
+      <div class="ch-avatar">${avatarHtml({ avatar: ch.emoji, equippedFrame: ch.frame }, 46)}${owned ? "" : '<span class="ch-lock">🔒</span>'}</div>
+      <div class="ch-name">${ch.name}</div>
+      <div class="ch-dots">${[0, 1, 2].map((i) => `<span class="ch-dot${i < prog ? " done" : ""}">${i < prog ? "✓" : i + 1}</span>`).join("")}</div>
+      <div class="ch-meta">${owned ? "🖼️ frame unlocked" : "🔒 finish the chapter"}</div>`;
+    card.addEventListener("click", () => {
+      runnerChapter = ch.id;
+      renderRunner();
+    });
+    grid.appendChild(card);
+  }
+  updateRunnerOverlay();
+}
+
+function nextRunnerLevel(ch) {
+  const prog = (state.runner || {})[ch.id] || 0;
+  return prog >= ch.levels ? 0 : prog;
+}
+
+function updateRunnerOverlay() {
+  const el = $("#runner-overlay");
+  if (!el || !currentAccount || !state) return;
+  const ch = RUNNER_CHAPTERS.find((c) => c.id === runnerChapter) || RUNNER_CHAPTERS[0];
+  const prog = (state.runner || {})[ch.id] || 0;
+  const btn = $("#btn-run");
+  if (runnerState === "running") { el.classList.add("hidden"); return; }
+  el.classList.remove("hidden");
+  if (runnerState === "won") {
+    $("#ro-title").textContent = "LEVEL CLEARED!";
+    $("#ro-sub").textContent = prog >= ch.levels ? "Chapter complete — replay any level." : `Next up: level ${prog + 1} of ${ch.levels}.`;
+    btn.textContent = "▶ RUN (100🎟️)";
+  } else if (runnerState === "lost") {
+    $("#ro-title").textContent = "OUT OF TIME!";
+    $("#ro-sub").textContent = "That run cost 100 tickets. Again?";
+    btn.textContent = "▶ TRY AGAIN (100🎟️)";
+  } else {
+    $("#ro-title").textContent = "READY?";
+    $("#ro-sub").textContent = `${ch.name} · Level ${prog + 1} of ${ch.levels} · reach ${ch.goal[Math.min(prog, 2)]}m in 5:00`;
+    btn.textContent = "▶ RUN (100🎟️)";
+  }
+  btn.disabled = state.tickets < RUNNER_COST;
+  btn.title = btn.disabled ? "Not enough tickets — finish tasks or win duplicates" : "";
+}
+
+function startRunner() {
+  if (!currentAccount || !state || runnerState === "running") return;
+  const ch = RUNNER_CHAPTERS.find((c) => c.id === runnerChapter) || RUNNER_CHAPTERS[0];
+  const level = nextRunnerLevel(ch);
+  if (state.tickets < RUNNER_COST) {
+    toast("Not enough tickets! Finish tasks or win duplicates.");
+    playSound.fail();
+    return;
+  }
+  state.tickets -= RUNNER_COST;
+  saveState();
+  renderStats();
+  runnerLevel = level;
+  runnerState = "running";
+  jumpQueued = false;
+  r = {
+    ch, level,
+    goal: ch.goal[level], dist: 0, time: RUNNER_TIME,
+    hearts: 3,
+    px: 90, py: 204, vy: 0, pw: 26, ph: 44,
+    grounded: true, inv: 0, flashT: 0, runT: 0,
+    speed: 240, spawnT: 1.1,
+    obstacles: [], particles: [], pT: 0, over: false,
+  };
+  $("#runner-stage").classList.add("playing");
+  updateRunnerHud();
+  updateRunnerOverlay();
+  log(`🏃 ${ch.name} — level ${level + 1} run started (−${RUNNER_COST}🎟️)`);
+  rLastT = performance.now();
+  cancelAnimationFrame(rRaf);
+  rRaf = requestAnimationFrame(runnerTick);
+}
+
+function runnerTick(t) {
+  if (!r || r.over) return;
+  const dt = Math.min(0.033, (t - rLastT) / 1000);
+  rLastT = t;
+  stepRunner(dt);
+  drawRunner();
+  updateRunnerHud();
+  if (!r.over) rRaf = requestAnimationFrame(runnerTick);
+}
+
+function stepRunner(dt) {
+  r.runT += dt;
+  r.time -= dt;
+  if (r.time <= 0) return endRun(false, "OUT OF TIME!");
+  r.dist += r.speed * dt;
+  if (r.dist >= r.goal) return endRun(true);
+  r.speed = Math.min(430, 240 + r.dist * 0.22);
+
+  // player physics
+  r.vy += 1500 * dt;
+  r.py += r.vy * dt;
+  if (r.py >= 204) { r.py = 204; r.vy = 0; r.grounded = true; }
+  else r.grounded = false;
+  if (jumpQueued && r.grounded) {
+    r.vy = -540;
+    r.grounded = false;
+    jumpQueued = false;
+    tone(440, 0.07, "square", 0.06);
+  }
+  if (r.inv > 0) r.inv -= dt;
+  if (r.flashT > 0) r.flashT -= dt;
+
+  // obstacles
+  r.spawnT -= dt;
+  if (r.spawnT <= 0) {
+    spawnObstacle();
+    r.spawnT = Math.max(0.55, 1.1 + Math.random() * 0.9 - r.dist / 3000);
+  }
+  for (const o of r.obstacles) o.x -= r.speed * dt;
+  r.obstacles = r.obstacles.filter((o) => o.x + o.w > -60);
+
+  for (const o of r.obstacles) {
+    if (r.inv > 0) continue;
+    const ph = 40;
+    if (o.x < r.px + r.pw && o.x + o.w > r.px && o.gy < r.py + ph && o.gy + o.h > r.py + 4) {
+      r.hearts--;
+      r.inv = 1.3;
+      r.flashT = 0.25;
+      playSound.fail();
+      if (r.hearts <= 0) return endRun(false, "CRASHED!");
+    }
+  }
+
+  // theme particles
+  r.pT -= dt;
+  if (r.pT <= 0) {
+    r.pT = 0.12;
+    const th = RUNNER_THEMES[r.ch.id];
+    const fall = r.ch.id === "snow";
+    for (let i = 0; i < 3; i++) {
+      r.particles.push({
+        x: Math.random() * 860,
+        y: fall ? -6 : 220 + Math.random() * 40,
+        vx: fall ? -20 - Math.random() * 30 : (Math.random() - 0.5) * 30,
+        vy: fall ? 40 + Math.random() * 40 : -20 - Math.random() * 30,
+        s: 2 + Math.random() * 3,
+        a: 0.4 + Math.random() * 0.5,
+        c: th.part,
+      });
+    }
+  }
+  for (const p of r.particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.a -= dt * 0.3; }
+  r.particles = r.particles.filter((p) => p.a > 0 && p.y < 300);
+}
+
+function spawnObstacle() {
+  if (Math.random() < 0.2) {
+    // double bump
+    r.obstacles.push({ x: 860, w: 26, h: 30, gy: 218, kind: "small" });
+    r.obstacles.push({ x: 860 + 76, w: 26, h: 30, gy: 218, kind: "small" });
+  } else if (Math.random() < 0.55) {
+    r.obstacles.push({ x: 860, w: 30, h: 34, gy: 214, kind: "small" });
+  } else {
+    r.obstacles.push({ x: 860, w: 34, h: 48, gy: 200, kind: "tall" });
+  }
+}
+
+function endRun(win, msg) {
+  if (!r || r.over) return;
+  r.over = true;
+  runnerState = win ? "won" : "lost";
+  cancelAnimationFrame(rRaf);
+  drawRunner();
+  if (win) {
+    const ch = r.ch;
+    const prog = (state.runner || {})[ch.id] || 0;
+    const newProg = Math.max(prog, r.level + 1);
+    state.runner = state.runner || {};
+    state.runner[ch.id] = newProg;
+    const f = FRAMES.find((x) => x.id === ch.frame);
+    saveState();
+    if (newProg >= ch.levels && f && !currentAccount.frames.includes(f.id)) {
+      currentAccount.frames.push(f.id);
+      currentAccount.equippedFrame = f.id;
+      saveAccounts();
+      confetti(200);
+      playSound.fanfare();
+      toast(`🏆 CHAPTER COMPLETE! ${f.name} frame unlocked!`);
+      log(`🏆 ${currentAccount.username} cleared ${ch.name} — ${f.name} frame unlocked!`);
+    } else {
+      confetti(90);
+      playSound.win();
+      toast(`✅ Level ${r.level + 1} cleared! (${Math.floor(r.dist)}m)`);
+      log(`🏁 ${ch.name} — level ${r.level + 1} cleared in ${fmtTime(r.time)}`);
+    }
+    renderAll();
+  } else {
+    playSound.fail();
+    toast(`💥 ${msg} — that run cost 100 tickets.`);
+    log(`💥 ${r.ch.name} — run failed (${msg})`);
+  }
+  updateRunnerOverlay();
+}
+
+function updateRunnerHud() {
+  if (!r) return;
+  $("#rh-level").textContent = `${r.ch.emoji} Lv ${r.level + 1}/3`;
+  $("#rh-hearts").textContent = "❤".repeat(Math.max(0, r.hearts)) + "🖤".repeat(Math.max(0, 3 - r.hearts));
+  $("#rh-dist").textContent = `${Math.floor(r.dist)}m / ${r.goal}m`;
+  $("#rh-time").textContent = fmtTime(r.time);
+}
+
+function roundRectC(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawRunner() {
+  if (!r || !rCtx) return;
+  const ctx = rCtx, W = 860, H = 300;
+  const th = RUNNER_THEMES[r.ch.id];
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, th.sky[0]);
+  g.addColorStop(0.6, th.sky[1]);
+  g.addColorStop(1, th.sky[2]);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // parallax silhouettes
+  const off = r.dist * 0.15;
+  ctx.fillStyle = th.far;
+  ctx.beginPath();
+  ctx.moveTo(0, 248);
+  for (let x = -(off % 260) - 260; x < W + 260; x += 260) ctx.lineTo(x + 130, 248 - (60 + ((x * 7) % 40)));
+  ctx.lineTo(W, 248);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = th.near;
+  ctx.beginPath();
+  ctx.moveTo(0, 248);
+  for (let x = -(off % 160) - 160; x < W + 160; x += 160) ctx.lineTo(x + 80, 248 - (26 + ((x * 13) % 18)));
+  ctx.lineTo(W, 248);
+  ctx.closePath();
+  ctx.fill();
+
+  // ground
+  ctx.fillStyle = th.ground;
+  ctx.fillRect(0, 248, W, H - 248);
+  ctx.fillStyle = th.groundLine;
+  ctx.fillRect(0, 248, W, 3);
+  ctx.strokeStyle = th.groundDark;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let x = -(r.dist % 60); x < W; x += 60) { ctx.moveTo(x, 253); ctx.lineTo(x + 20, 253); }
+  ctx.stroke();
+
+  // obstacles
+  for (const o of r.obstacles) drawObstacle(ctx, th, o);
+
+  // particles
+  for (const p of r.particles) {
+    ctx.globalAlpha = Math.max(0, p.a);
+    ctx.fillStyle = p.c;
+    ctx.fillRect(p.x, p.y, p.s, p.s);
+  }
+  ctx.globalAlpha = 1;
+
+  drawPlayer(ctx, th);
+
+  if (r.flashT > 0) {
+    ctx.fillStyle = "rgba(255, 45, 149, 0.35)";
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+function drawObstacle(ctx, th, o) {
+  const base = 248;
+  if (r.ch.id === "snow") {
+    const cx = o.x + o.w / 2;
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath(); ctx.arc(cx, base - o.h + 13, 14, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, base - o.h + 31, 10, 0, 7); ctx.fill();
+    ctx.fillStyle = th.obstacle2;
+    ctx.fillRect(cx - 3, base - o.h + 27, 7, 3);
+  } else if (r.ch.id === "desert") {
+    ctx.fillStyle = th.obstacle;
+    ctx.fillRect(o.x, base - o.h, o.w, o.h);
+    ctx.fillStyle = th.obstacle2;
+    ctx.fillRect(o.x + o.w / 2 - 8, base - o.h, 16, 7);
+  } else {
+    ctx.fillStyle = th.obstacle;
+    ctx.fillRect(o.x, base - o.h, o.w, o.h);
+    ctx.fillStyle = th.obstacle2;
+    ctx.fillRect(o.x + 2, base - o.h, 4, o.h);
+  }
+}
+
+function drawPlayer(ctx, th) {
+  if (r.inv > 0 && Math.floor(r.runT * 10) % 2 === 0) return; // invincibility blink
+  const px = r.px, py = r.py, ph = 44;
+  const step = r.grounded ? Math.sin(r.runT * 14) : 0;
+  ctx.fillStyle = "#1e1145";
+  ctx.fillRect(px + 6, py + ph - 9, 5, 9 + step * 3);
+  ctx.fillRect(px + 15, py + ph - 9, 5, 9 - step * 3);
+  ctx.fillStyle = "#ffffff";
+  roundRectC(ctx, px, py + ph - 33, 26, 29, 6);
+  ctx.fill();
+  ctx.fillStyle = th.scarf;
+  ctx.fillRect(px + 19, py + ph - 25, 10, 5);
+  ctx.fillStyle = "#ffd6a8";
+  ctx.beginPath(); ctx.arc(px + 13, py + ph - 39, 8, 0, 7); ctx.fill();
+  ctx.fillStyle = "#1e1145";
+  ctx.fillRect(px + 16, py + ph - 40, 3, 3);
+}
+
+$("#btn-run").addEventListener("click", startRunner);
+$("#btn-rjump").addEventListener("pointerdown", (e) => { e.preventDefault(); if (runnerState === "running") jumpQueued = true; });
+document.addEventListener("keydown", (e) => {
+  if (runnerState !== "running") return;
+  if (e.target.matches("input, textarea")) return;
+  if (e.key === " " || e.key === "ArrowUp" || e.key === "w" || e.key === "W") {
+    e.preventDefault();
+    jumpQueued = true;
+  }
+});
+document.addEventListener("keyup", (e) => {
+  if (e.key === " " || e.key === "ArrowUp" || e.key === "w" || e.key === "W") jumpQueued = false;
+});
+
 /* ---------- init ---------- */
 
 function init() {
@@ -963,6 +1536,7 @@ function init() {
     if (e.key === "Enter") createAccount();
   });
   renderAvatarPicker();
+  updateDropLabel();
 
   const sessionId = loadSession();
   const acc = sessionId ? accounts.find((a) => a.id === sessionId) : null;

@@ -81,10 +81,11 @@
         <input type="text" id="task-input" class="text-input" placeholder="What needs doing?" maxlength="60" autocomplete="off" required>
         <div class="star-picker" aria-label="Pick a difficulty">
           <span class="star-picker-label">Difficulty</span>
+          <button type="button" class="star-btn on" data-stars="0" title="No sweat">☆</button>
           <button type="button" class="star-btn on" data-stars="1" title="Easy">★</button>
           <button type="button" class="star-btn on" data-stars="2" title="Medium">★</button>
           <button type="button" class="star-btn" data-stars="3" title="Hard">★</button>
-          <span class="star-hint" id="star-hint">easy — 3 coins · 25 tickets</span>
+          <span class="star-hint" id="star-hint">easy — 2 coins · 25 tickets</span>
         </div>
         <button type="submit" class="btn btn-primary add-btn">Add to machine 🧸</button>
       </form>
@@ -107,9 +108,13 @@
   <section id="view-arcade" class="view">
     <div class="arcade-layout">
       <div class="machine-column">
+        <div class="machine-tabs">
+          <button type="button" class="m-tab active" data-mode="task">📝 Task Claw</button>
+          <button type="button" class="m-tab" data-mode="prize">🎁 Prize Claw</button>
+        </div>
         <div class="machine">
-          <div class="machine-title">🧸 CLAW MACHINE</div>
-          <div class="machine-subtitle">grab a task. commit. conquer. <span class="sub-easter">(physics not included)</span></div>
+          <div class="machine-title" id="machine-title">🧸 TASK CLAW</div>
+          <div class="machine-subtitle"><span id="machine-sub">grab a task. commit. conquer.</span> <span class="sub-easter">(physics not included)</span></div>
           <div class="glass" id="glass">
             <div class="glare"></div>
             <div class="claw" id="claw">
@@ -140,12 +145,14 @@
       <aside class="arcade-side">
         <div class="panel">
           <h2 class="panel-title">🪙 Coins: <span class="neon-yellow" id="arcade-coins">0</span></h2>
-          <p class="muted">Every play costs <strong>1 coin</strong>. Finish tasks to earn <strong>3–9 coins</strong> and <strong>25–75 tickets</strong>.</p>
+          <p class="muted"><strong>Task Claw:</strong> 1 coin per play · <strong>Prize Claw:</strong> 2 coins per play. Finish tasks to earn <strong>1–4 coins</strong> and up to <strong>75 tickets</strong>.</p>
           <div class="how-to">
             <p><b>1.</b> Add tasks — they become plushies.</p>
             <p><b>2.</b> Line up the claw and drop it.</p>
             <p><b>3.</b> The plushie you grab is your <b>next task</b>.</p>
             <p><b>4.</b> Finish it → coins, tickets &amp; confetti!</p>
+            <p><b>5.</b> Or play the <b>Prize Claw</b> — grab avatar frames &amp; name tags!</p>
+            <p><b>6.</b> Burning tickets? Hit the <b>Runner</b> below — 100🎟️ per run, clear a chapter for its frame!</p>
           </div>
         </div>
         <div class="panel">
@@ -153,6 +160,30 @@
           <ul id="game-log" class="game-log"></ul>
         </div>
       </aside>
+    </div>
+
+    <div class="panel runner-panel">
+      <h2 class="panel-title">🏃 Runner <span class="count-chip">100🎟️ per run</span></h2>
+      <p class="muted">A Mario-style dash through 3 chapters. Each level has a <b>5-minute</b> limit — reach the finish line with hearts to spare. Clear all 3 levels of a chapter to unlock its <b>exclusive avatar frame</b>.</p>
+      <div class="chapter-grid" id="chapter-grid"></div>
+      <div class="runner-stage" id="runner-stage">
+        <canvas id="runner-canvas" width="860" height="300"></canvas>
+        <div class="runner-hud" id="runner-hud">
+          <span id="rh-level">—</span>
+          <span id="rh-hearts">❤❤❤</span>
+          <span id="rh-dist">0m / 0m</span>
+          <span id="rh-time">5:00</span>
+        </div>
+        <div class="runner-overlay" id="runner-overlay">
+          <div class="ro-title" id="ro-title">READY?</div>
+          <div class="ro-sub" id="ro-sub">—</div>
+          <button class="btn btn-primary" id="btn-run" type="button">▶ RUN (100🎟️)</button>
+        </div>
+        <div class="runner-controls">
+          <button class="btn runner-jump" id="btn-rjump" type="button" aria-label="Jump">⬆</button>
+        </div>
+      </div>
+      <p class="muted keyboard-hint">jump with <kbd>Space</kbd> / <kbd>↑</kbd> / <kbd>W</kbd> or tap the ⬆ button</p>
     </div>
   </section>
 
@@ -208,6 +239,10 @@
       <div class="panel">
         <h2 class="panel-title">🖼️ Avatar frames</h2>
         <div class="frames-list" id="frames-list"></div>
+      </div>
+      <div class="panel">
+        <h2 class="panel-title">🏷️ Name tags</h2>
+        <div class="frames-list" id="tags-list"></div>
       </div>
     </div>
   </section>
