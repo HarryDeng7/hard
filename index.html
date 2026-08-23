@@ -164,7 +164,7 @@
 
     <div class="panel runner-panel">
       <h2 class="panel-title">🏃 Runner <span class="count-chip">100🎟️ per run</span></h2>
-      <p class="muted">A Mario-style dash through 3 chapters of <b>18 levels</b>. Every level has a <b>5-minute</b> limit — reach the finish line with hearts to spare. Clear all 18 levels of a chapter to unlock its <b>exclusive avatar frame</b>.</p>
+      <p class="muted">Mario-style controls: run <b>← →</b> (or <b>A D</b>) and jump with <b>Space</b> — hold the key to jump higher. Dodge obstacles, leap the pits, and reach the finish line before the <b>5-minute</b> clock runs out. 3 chapters of <b>18 levels</b>; clear all 18 to unlock the chapter's <b>exclusive avatar frame</b>.</p>
       <div class="chapter-grid" id="chapter-grid"></div>
       <div class="runner-stage" id="runner-stage">
         <canvas id="runner-canvas" width="860" height="300"></canvas>
@@ -180,10 +180,12 @@
           <button class="btn btn-primary" id="btn-run" type="button">▶ RUN (100🎟️)</button>
         </div>
         <div class="runner-controls">
+          <button class="btn runner-move" id="btn-rleft" type="button" aria-label="Move left">◀</button>
           <button class="btn runner-jump" id="btn-rjump" type="button" aria-label="Jump">⬆</button>
+          <button class="btn runner-move" id="btn-rright" type="button" aria-label="Move right">▶</button>
         </div>
       </div>
-      <p class="muted keyboard-hint">jump with <kbd>Space</kbd> / <kbd>↑</kbd> / <kbd>W</kbd> or tap the ⬆ button</p>
+      <p class="muted keyboard-hint">move with <kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>D</kbd>, jump with <kbd>Space</kbd> / <kbd>↑</kbd> / <kbd>W</kbd> — hold to jump higher, release for a short hop. Watch out: pits cost a heart!</p>
     </div>
   </section>
 

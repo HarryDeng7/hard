@@ -1176,6 +1176,9 @@ let r = null;   // live game state
 let rRaf = 0;
 let rLastT = 0;
 let jumpQueued = false;
+let jumpHeld = false;
+let keyL = false;
+let keyR = false;
 
 const fmtTime = (s) => {
   const m = Math.floor(Math.max(0, s) / 60);
@@ -1233,7 +1236,7 @@ function updateRunnerOverlay() {
     btn.textContent = "▶ TRY AGAIN (100🎟️)";
   } else {
     $("#ro-title").textContent = "READY?";
-    $("#ro-sub").textContent = `${ch.name} · Level ${next + 1} of ${RUNNER_LEVELS} · reach ${goalKm}km in 5:00`;
+    $("#ro-sub").textContent = `${ch.name} · Level ${next + 1} of ${RUNNER_LEVELS} · reach ${goalKm}km in 5:00 · ← → move, Space jump`;
     btn.textContent = "▶ RUN (100🎟️)";
   }
   btn.disabled = state.tickets < RUNNER_COST;
@@ -1255,13 +1258,17 @@ function startRunner() {
   runnerLevel = level;
   runnerState = "running";
   jumpQueued = false;
+  jumpHeld = false;
+  keyL = false;
+  keyR = false;
   r = {
     ch, level,
     goal: ch.goals[level], dist: 0, time: RUNNER_TIME,
     hearts: 3,
     px: 90, py: 204, vy: 0, pw: 26, ph: 44,
     grounded: true, inv: 0, flashT: 0, runT: 0,
-    speed: 240, spawnT: 1.1,
+    vx: 0, camX: 0, coyote: 0, jumpCut: false,
+    grounds: [{ x: -400, w: 900 }], nextGroundX: 500,
     obstacles: [], particles: [], pT: 0, over: false,
   };
   $("#runner-stage").classList.add("playing");
@@ -1287,37 +1294,67 @@ function stepRunner(dt) {
   r.runT += dt;
   r.time -= dt;
   if (r.time <= 0) return endRun(false, "OUT OF TIME!");
-  r.dist += r.speed * dt;
-  if (r.dist >= r.goal) return endRun(true);
-  r.speed = Math.min(430, 240 + r.dist * 0.22);
+  genWorld();
+  r.obstacles = r.obstacles.filter((o) => o.x + o.w > r.camX - 300);
 
-  // player physics
+  // ---- Mario-style movement: free left/right + variable-height jump ----
+  const accel = 2200, maxV = 320, maxB = 200, fric = 2600;
+  if (keyL && !keyR) r.vx = Math.max(r.vx - accel * dt, -maxB);
+  else if (keyR && !keyL) r.vx = Math.min(r.vx + accel * dt, maxV);
+  else if (r.vx > 0) r.vx = Math.max(0, r.vx - fric * dt);
+  else r.vx = Math.min(0, r.vx + fric * dt);
+  r.px = Math.max(0, r.px + r.vx * dt);
+  r.dist = Math.max(r.dist, r.px);
+  if (r.dist >= r.goal) return endRun(true);
+
+  // jump: buffered press + coyote time + release cuts the hop short
+  if (r.coyote > 0) r.coyote -= dt;
+  if (jumpQueued) {
+    if (r.grounded || r.coyote > 0) {
+      r.vy = -620;
+      r.grounded = false;
+      r.coyote = 0;
+      r.jumpCut = false;
+      tone(440, 0.07, "square", 0.06);
+    }
+    jumpQueued = false;
+  }
+  if (!jumpHeld && !r.jumpCut && r.vy < 0) { r.vy *= 0.45; r.jumpCut = true; }
+
+  // gravity + vertical move
   r.vy += 1500 * dt;
   r.py += r.vy * dt;
-  if (r.py >= 204) { r.py = 204; r.vy = 0; r.grounded = true; }
-  else r.grounded = false;
-  if (jumpQueued && r.grounded) {
-    r.vy = -540;
-    r.grounded = false;
-    jumpQueued = false;
-    tone(440, 0.07, "square", 0.06);
+
+  // land on ground segments (pit gaps fall through)
+  r.grounded = false;
+  const pL = r.px, pR = r.px + r.pw;
+  for (const g of r.grounds) {
+    if (g.x > pR || g.x + g.w < pL) continue;
+    if (r.vy >= 0 && r.py + r.ph >= 248 && r.py + r.ph - r.vy * dt <= 248) {
+      r.py = 204; r.vy = 0; r.grounded = true;
+      break;
+    }
   }
+  if (!r.grounded && r.py + r.ph <= 248.5 && groundAt(r.px + r.pw / 2)) { r.py = 204; r.grounded = true; }
+  if (r.grounded) r.coyote = 0.08;
+
+  // fell into a pit
+  if (r.py > 340) {
+    r.hearts--;
+    playSound.fail();
+    if (r.hearts <= 0) return endRun(false, "FELL!");
+    toast("🕳️ Fell in a pit — lost a heart!");
+    respawnRunner();
+    return;
+  }
+
   if (r.inv > 0) r.inv -= dt;
   if (r.flashT > 0) r.flashT -= dt;
 
-  // obstacles
-  r.spawnT -= dt;
-  if (r.spawnT <= 0) {
-    spawnObstacle();
-    r.spawnT = Math.max(0.55, 1.1 + Math.random() * 0.9 - r.dist / 3000);
-  }
-  for (const o of r.obstacles) o.x -= r.speed * dt;
-  r.obstacles = r.obstacles.filter((o) => o.x + o.w > -60);
-
+  // obstacle collision
   for (const o of r.obstacles) {
     if (r.inv > 0) continue;
-    const ph = 40;
-    if (o.x < r.px + r.pw && o.x + o.w > r.px && o.gy < r.py + ph && o.gy + o.h > r.py + 4) {
+    if (o.x < r.px + r.pw && o.x + o.w > r.px && o.gy < r.py + r.ph && o.gy + o.h > r.py + 4) {
       r.hearts--;
       r.inv = 1.3;
       r.flashT = 0.25;
@@ -1325,6 +1362,9 @@ function stepRunner(dt) {
       if (r.hearts <= 0) return endRun(false, "CRASHED!");
     }
   }
+
+  // camera follows the player
+  r.camX = Math.max(0, r.px - 90);
 
   // theme particles
   r.pT -= dt;
@@ -1348,15 +1388,43 @@ function stepRunner(dt) {
   r.particles = r.particles.filter((p) => p.a > 0 && p.y < 300);
 }
 
-function spawnObstacle() {
-  if (Math.random() < 0.2) {
+function genWorld() {
+  while (r.nextGroundX < r.camX + 1700) {
+    const gap = Math.random() < 0.28 ? 90 + Math.random() * 80 : 0;
+    const gx = r.nextGroundX + gap;
+    const gw = 460 + Math.random() * 940;
+    r.grounds.push({ x: gx, w: gw });
+    r.nextGroundX = gx + gw;
+    let ox = gx + 130, last = -9999;
+    while (ox < gx + gw - 110) {
+      if (Math.random() < 0.5 && ox - last > 260) { spawnObstacleAt(ox); last = ox; }
+      ox += 220 + Math.random() * 380;
+    }
+  }
+  r.grounds = r.grounds.filter((g) => g.x + g.w > r.camX - 300);
+}
+
+function groundAt(x) {
+  return r.grounds.some((g) => x >= g.x && x <= g.x + g.w);
+}
+
+function respawnRunner() {
+  let x = r.camX + 80;
+  for (let i = 0; i < 6 && !groundAt(x); i++) x += 90;
+  r.px = x; r.py = 204; r.vy = 0; r.vx = 0;
+  r.grounded = true; r.inv = 1.5;
+  r.particles.push({ x: x - r.camX, y: 210, vx: 0, vy: -70, s: 6, a: 1, c: "#ff2d95" });
+}
+
+function spawnObstacleAt(x) {
+  if (Math.random() < 0.22) {
     // double bump
-    r.obstacles.push({ x: 860, w: 26, h: 30, gy: 218, kind: "small" });
-    r.obstacles.push({ x: 860 + 76, w: 26, h: 30, gy: 218, kind: "small" });
+    r.obstacles.push({ x, w: 26, h: 30, gy: 218, kind: "small" });
+    r.obstacles.push({ x: x + 76, w: 26, h: 30, gy: 218, kind: "small" });
   } else if (Math.random() < 0.55) {
-    r.obstacles.push({ x: 860, w: 30, h: 34, gy: 214, kind: "small" });
+    r.obstacles.push({ x, w: 30, h: 34, gy: 214, kind: "small" });
   } else {
-    r.obstacles.push({ x: 860, w: 34, h: 48, gy: 200, kind: "tall" });
+    r.obstacles.push({ x, w: 34, h: 48, gy: 200, kind: "tall" });
   }
 }
 
@@ -1427,7 +1495,7 @@ function drawRunner() {
   ctx.fillRect(0, 0, W, H);
 
   // parallax silhouettes
-  const off = r.dist * 0.15;
+  const off = r.camX * 0.15;
   ctx.fillStyle = th.far;
   ctx.beginPath();
   ctx.moveTo(0, 248);
@@ -1443,16 +1511,21 @@ function drawRunner() {
   ctx.closePath();
   ctx.fill();
 
-  // ground
-  ctx.fillStyle = th.ground;
-  ctx.fillRect(0, 248, W, H - 248);
-  ctx.fillStyle = th.groundLine;
-  ctx.fillRect(0, 248, W, 3);
-  ctx.strokeStyle = th.groundDark;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (let x = -(r.dist % 60); x < W; x += 60) { ctx.moveTo(x, 253); ctx.lineTo(x + 20, 253); }
-  ctx.stroke();
+  // ground segments — pits are real, watch your step!
+  const camX = r.camX;
+  for (const g of r.grounds) {
+    if (g.x + g.w < camX || g.x > camX + W) continue;
+    const sx = g.x - camX, sw = g.w;
+    ctx.fillStyle = th.ground;
+    ctx.fillRect(sx, 248, sw, H - 248);
+    ctx.fillStyle = th.groundLine;
+    ctx.fillRect(sx, 248, sw, 3);
+    ctx.strokeStyle = th.groundDark;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let x = sx - (((camX % 60) + 60) % 60); x < sx + sw; x += 60) { ctx.moveTo(x, 253); ctx.lineTo(x + 20, 253); }
+    ctx.stroke();
+  }
 
   // obstacles
   for (const o of r.obstacles) drawObstacle(ctx, th, o);
@@ -1474,9 +1547,9 @@ function drawRunner() {
 }
 
 function drawObstacle(ctx, th, o) {
-  const base = 248;
+  const base = 248, x = o.x - r.camX;
   if (r.ch.id === "snow") {
-    const cx = o.x + o.w / 2;
+    const cx = x + o.w / 2;
     ctx.fillStyle = "#ffffff";
     ctx.beginPath(); ctx.arc(cx, base - o.h + 13, 14, 0, 7); ctx.fill();
     ctx.beginPath(); ctx.arc(cx, base - o.h + 31, 10, 0, 7); ctx.fill();
@@ -1484,47 +1557,63 @@ function drawObstacle(ctx, th, o) {
     ctx.fillRect(cx - 3, base - o.h + 27, 7, 3);
   } else if (r.ch.id === "desert") {
     ctx.fillStyle = th.obstacle;
-    ctx.fillRect(o.x, base - o.h, o.w, o.h);
+    ctx.fillRect(x, base - o.h, o.w, o.h);
     ctx.fillStyle = th.obstacle2;
-    ctx.fillRect(o.x + o.w / 2 - 8, base - o.h, 16, 7);
+    ctx.fillRect(x + o.w / 2 - 8, base - o.h, 16, 7);
   } else {
     ctx.fillStyle = th.obstacle;
-    ctx.fillRect(o.x, base - o.h, o.w, o.h);
+    ctx.fillRect(x, base - o.h, o.w, o.h);
     ctx.fillStyle = th.obstacle2;
-    ctx.fillRect(o.x + 2, base - o.h, 4, o.h);
+    ctx.fillRect(x + 2, base - o.h, 4, o.h);
   }
 }
 
 function drawPlayer(ctx, th) {
   if (r.inv > 0 && Math.floor(r.runT * 10) % 2 === 0) return; // invincibility blink
-  const px = r.px, py = r.py, ph = 44;
+  const py = r.py, ph = 44;
   const step = r.grounded ? Math.sin(r.runT * 14) : 0;
+  ctx.save();
+  ctx.translate(r.px - r.camX, 0);
+  if (r.vx < 0) { ctx.translate(26, 0); ctx.scale(-1, 1); } // face the way you run
   ctx.fillStyle = "#1e1145";
-  ctx.fillRect(px + 6, py + ph - 9, 5, 9 + step * 3);
-  ctx.fillRect(px + 15, py + ph - 9, 5, 9 - step * 3);
+  ctx.fillRect(6, py + ph - 9, 5, 9 + step * 3);
+  ctx.fillRect(15, py + ph - 9, 5, 9 - step * 3);
   ctx.fillStyle = "#ffffff";
-  roundRectC(ctx, px, py + ph - 33, 26, 29, 6);
+  roundRectC(ctx, 0, py + ph - 33, 26, 29, 6);
   ctx.fill();
   ctx.fillStyle = th.scarf;
-  ctx.fillRect(px + 19, py + ph - 25, 10, 5);
+  ctx.fillRect(19, py + ph - 25, 10, 5);
   ctx.fillStyle = "#ffd6a8";
-  ctx.beginPath(); ctx.arc(px + 13, py + ph - 39, 8, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(13, py + ph - 39, 8, 0, 7); ctx.fill();
   ctx.fillStyle = "#1e1145";
-  ctx.fillRect(px + 16, py + ph - 40, 3, 3);
+  ctx.fillRect(16, py + ph - 40, 3, 3);
+  ctx.restore();
 }
 
 $("#btn-run").addEventListener("click", startRunner);
-$("#btn-rjump").addEventListener("pointerdown", (e) => { e.preventDefault(); if (runnerState === "running") jumpQueued = true; });
+const runnerBtn = (sel, on, off) => {
+  const el = $(sel);
+  el.addEventListener("pointerdown", (e) => { e.preventDefault(); if (runnerState === "running") on(); });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => el.addEventListener(ev, (e) => { e.preventDefault(); off(); }));
+};
+runnerBtn("#btn-rjump", () => { jumpQueued = true; jumpHeld = true; }, () => { jumpHeld = false; });
+runnerBtn("#btn-rleft", () => { keyL = true; }, () => { keyL = false; });
+runnerBtn("#btn-rright", () => { keyR = true; }, () => { keyR = false; });
 document.addEventListener("keydown", (e) => {
-  if (runnerState !== "running") return;
   if (e.target.matches("input, textarea")) return;
-  if (e.key === " " || e.key === "ArrowUp" || e.key === "w" || e.key === "W") {
+  const k = e.key;
+  if (k === "ArrowLeft" || k === "a" || k === "A") { keyL = true; if (runnerState === "running") e.preventDefault(); }
+  else if (k === "ArrowRight" || k === "d" || k === "D") { keyR = true; if (runnerState === "running") e.preventDefault(); }
+  else if (k === " " || k === "ArrowUp" || k === "w" || k === "W") {
     e.preventDefault();
-    jumpQueued = true;
+    if (runnerState === "running") { jumpQueued = true; jumpHeld = true; }
   }
 });
 document.addEventListener("keyup", (e) => {
-  if (e.key === " " || e.key === "ArrowUp" || e.key === "w" || e.key === "W") jumpQueued = false;
+  const k = e.key;
+  if (k === "ArrowLeft" || k === "a" || k === "A") keyL = false;
+  else if (k === "ArrowRight" || k === "d" || k === "D") keyR = false;
+  else if (k === " " || k === "ArrowUp" || k === "w" || k === "W") jumpHeld = false;
 });
 
 /* ---------- init ---------- */

@@ -30,7 +30,7 @@ The profile page shows your last 7 days as a strip of circles, so you always kno
 - 🗂️ Add / complete / delete tasks with 0–3 star difficulty
 - 🧸 Working claw machine: aim matters, and yes — sometimes the claw "slips"
 - 🎁 Prize Claw — a second machine (coins, not tickets) stocked with visible avatar frames & name tags — grab the one you aim at; duplicates refund as tickets
-- 🏃 Runner — a Mario-style 2D side-scroller below the machine: 100 tickets per run, 5-minute time limit per level, 3 chapters (Snow Mountain / Desert / Volcano) × 18 levels, each chapter with an exclusive avatar frame
+- 🏃 Runner — a Mario-style 2D side-scroller below the machine: full left/right movement with variable-height jumps, pitfalls that cost hearts, 100 tickets per run, 5-minute time limit per level, 3 chapters (Snow Mountain / Desert / Volcano) × 18 levels, each chapter with an exclusive avatar frame
 - 🪙 Coin economy: complete tasks to earn more plays (1–4 coins per task)
 - 🎟️ Ticket system + prize wall with collectible locker badges
 - 🔥 Daily completion streak tracking
@@ -46,7 +46,8 @@ The profile page shows your last 7 days as a strip of circles, so you always kno
 | --- | --- | --- |
 | Move claw | ← → or A D | ◀ ▶ |
 | Drop claw | Space / Enter | ⬇ DROP |
-| Runner: jump | Space / ↑ / W | ⬆ button |
+| Runner: move | ← → or A D | ◀ ▶ |
+| Runner: jump | Space / ↑ / W (hold = higher) | ⬆ button |
 
 ## Local run
 

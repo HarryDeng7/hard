@@ -1199,7 +1199,7 @@ kbd {
 .runner-overlay.hidden { display: none; }
 .ro-title { font-family: "Press Start 2P", monospace; font-size: 1rem; color: var(--yellow); }
 .ro-sub { font-size: 0.85rem; color: var(--muted); max-width: 480px; }
-.runner-controls { display: flex; justify-content: center; padding: 10px 0 2px; }
+.runner-controls { display: flex; justify-content: center; gap: 14px; padding: 10px 0 2px; }
 .runner-jump {
   width: 64px;
   height: 64px;
@@ -1209,6 +1209,15 @@ kbd {
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35), 0 0 18px rgba(34, 211, 238, 0.4);
 }
 .runner-jump:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); }
+.runner-move {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  font-size: 1.4rem;
+  background: linear-gradient(135deg, #8b5cf6, var(--cyan));
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+}
+.runner-move:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); }
 @media (max-width: 720px) {
   .chapter-grid { grid-template-columns: 1fr; }
 }
