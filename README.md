@@ -8,7 +8,7 @@ Turn your to-do list into an arcade. Every task you add becomes a plushie inside
 2. **Play the arcade** → 1 coin per play. Line up the claw, drop it, and the plushie you grab becomes your **NEXT UP** task
 3. **Finish the task** → confetti, retro sound effects, coins + tickets, and a daily streak 🔥
 4. **Hit the Prize Wall** → trade tickets for legendary prizes (Tootsie Roll, Golden Claw Trophy, Champion Plushie…) and keep them in your locker
-5. **Play the Runner** → 100 tickets per run. Dash through 5-minute levels across 3 chapters (❄️ Snow Mountain, 🏜️ Scorching Desert, 🌋 Burning Volcano) — clear a chapter to earn its exclusive avatar frame
+5. **Play the Runner** → 100 tickets per run. Dash through 5-minute levels across 3 chapters (❄️ Snow Mountain, 🏜️ Scorching Desert, 🌋 Burning Volcano), 18 levels each — clear a chapter to earn its exclusive avatar frame
 
 ## Daily check-in
 
@@ -30,7 +30,7 @@ The profile page shows your last 7 days as a strip of circles, so you always kno
 - 🗂️ Add / complete / delete tasks with 0–3 star difficulty
 - 🧸 Working claw machine: aim matters, and yes — sometimes the claw "slips"
 - 🎁 Prize Claw — a second machine (coins, not tickets) stocked with visible avatar frames & name tags — grab the one you aim at; duplicates refund as tickets
-- 🏃 Runner — a Mario-style 2D side-scroller below the machine: 100 tickets per run, 5-minute time limit per level, 3 chapters (Snow Mountain / Desert / Volcano), each with 3 levels and a chapter-exclusive avatar frame
+- 🏃 Runner — a Mario-style 2D side-scroller below the machine: 100 tickets per run, 5-minute time limit per level, 3 chapters (Snow Mountain / Desert / Volcano) × 18 levels, each chapter with an exclusive avatar frame
 - 🪙 Coin economy: complete tasks to earn more plays (1–4 coins per task)
 - 🎟️ Ticket system + prize wall with collectible locker badges
 - 🔥 Daily completion streak tracking

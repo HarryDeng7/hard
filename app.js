@@ -1141,10 +1141,12 @@ function loopConfetti() {
 
 const RUNNER_COST = 100; // tickets per run
 const RUNNER_TIME = 300; // 5-minute limit per level
+const RUNNER_LEVELS = 18; // levels per chapter
+const chapterGoals = (base, step) => Array.from({ length: RUNNER_LEVELS }, (_, i) => base + i * step);
 const RUNNER_CHAPTERS = [
-  { id: "snow", name: "Snow Mountain", emoji: "❄️", frame: "snow", goal: [10000, 16000, 22000] },
-  { id: "desert", name: "Scorching Desert", emoji: "🏜️", frame: "desert", goal: [11000, 17000, 24000] },
-  { id: "volcano", name: "Burning Volcano", emoji: "🌋", frame: "volcano", goal: [12000, 18000, 26000] },
+  { id: "snow", name: "Snow Mountain", emoji: "❄️", frame: "snow", goals: chapterGoals(24000, 5000) },
+  { id: "desert", name: "Scorching Desert", emoji: "🏜️", frame: "desert", goals: chapterGoals(26000, 5100) },
+  { id: "volcano", name: "Burning Volcano", emoji: "🌋", frame: "volcano", goals: chapterGoals(28000, 5200) },
 ];
 const RUNNER_THEMES = {
   snow: {
@@ -1191,11 +1193,12 @@ function renderRunner() {
     const owned = currentAccount.frames.includes(ch.frame);
     const card = document.createElement("div");
     card.className = "ch-card" + (runnerChapter === ch.id ? " active" : "");
+    const pct = Math.min(100, Math.round((prog / RUNNER_LEVELS) * 100));
     card.innerHTML = `
       <div class="ch-avatar">${avatarHtml({ avatar: ch.emoji, equippedFrame: ch.frame }, 46)}${owned ? "" : '<span class="ch-lock">🔒</span>'}</div>
       <div class="ch-name">${ch.name}</div>
-      <div class="ch-dots">${[0, 1, 2].map((i) => `<span class="ch-dot${i < prog ? " done" : ""}">${i < prog ? "✓" : i + 1}</span>`).join("")}</div>
-      <div class="ch-meta">${owned ? "🖼️ frame unlocked" : "🔒 finish the chapter"}</div>`;
+      <div class="ch-bar"><div class="ch-bar-fill" style="width:${pct}%"></div></div>
+      <div class="ch-meta">${owned ? "🖼️ frame unlocked" : "🔒 finish the chapter"} · ${prog}/${RUNNER_LEVELS}</div>`;
     card.addEventListener("click", () => {
       runnerChapter = ch.id;
       renderRunner();
@@ -1207,7 +1210,7 @@ function renderRunner() {
 
 function nextRunnerLevel(ch) {
   const prog = (state.runner || {})[ch.id] || 0;
-  return prog >= ch.levels ? 0 : prog;
+  return prog >= RUNNER_LEVELS ? 0 : prog;
 }
 
 function updateRunnerOverlay() {
@@ -1215,12 +1218,14 @@ function updateRunnerOverlay() {
   if (!el || !currentAccount || !state) return;
   const ch = RUNNER_CHAPTERS.find((c) => c.id === runnerChapter) || RUNNER_CHAPTERS[0];
   const prog = (state.runner || {})[ch.id] || 0;
+  const next = prog >= RUNNER_LEVELS ? 0 : prog;
+  const goalKm = (ch.goals[next] / 1000).toFixed(1);
   const btn = $("#btn-run");
   if (runnerState === "running") { el.classList.add("hidden"); return; }
   el.classList.remove("hidden");
   if (runnerState === "won") {
     $("#ro-title").textContent = "LEVEL CLEARED!";
-    $("#ro-sub").textContent = prog >= ch.levels ? "Chapter complete — replay any level." : `Next up: level ${prog + 1} of ${ch.levels}.`;
+    $("#ro-sub").textContent = prog >= RUNNER_LEVELS ? "Chapter complete — replay any level." : `Next up: level ${prog + 1} of ${RUNNER_LEVELS}.`;
     btn.textContent = "▶ RUN (100🎟️)";
   } else if (runnerState === "lost") {
     $("#ro-title").textContent = "OUT OF TIME!";
@@ -1228,7 +1233,7 @@ function updateRunnerOverlay() {
     btn.textContent = "▶ TRY AGAIN (100🎟️)";
   } else {
     $("#ro-title").textContent = "READY?";
-    $("#ro-sub").textContent = `${ch.name} · Level ${prog + 1} of ${ch.levels} · reach ${ch.goal[Math.min(prog, 2)]}m in 5:00`;
+    $("#ro-sub").textContent = `${ch.name} · Level ${next + 1} of ${RUNNER_LEVELS} · reach ${goalKm}km in 5:00`;
     btn.textContent = "▶ RUN (100🎟️)";
   }
   btn.disabled = state.tickets < RUNNER_COST;
@@ -1252,7 +1257,7 @@ function startRunner() {
   jumpQueued = false;
   r = {
     ch, level,
-    goal: ch.goal[level], dist: 0, time: RUNNER_TIME,
+    goal: ch.goals[level], dist: 0, time: RUNNER_TIME,
     hearts: 3,
     px: 90, py: 204, vy: 0, pw: 26, ph: 44,
     grounded: true, inv: 0, flashT: 0, runT: 0,
@@ -1369,7 +1374,7 @@ function endRun(win, msg) {
     state.runner[ch.id] = newProg;
     const f = FRAMES.find((x) => x.id === ch.frame);
     saveState();
-    if (newProg >= ch.levels && f && !currentAccount.frames.includes(f.id)) {
+    if (newProg >= RUNNER_LEVELS && f && !currentAccount.frames.includes(f.id)) {
       currentAccount.frames.push(f.id);
       currentAccount.equippedFrame = f.id;
       saveAccounts();
@@ -1380,7 +1385,7 @@ function endRun(win, msg) {
     } else {
       confetti(90);
       playSound.win();
-      toast(`✅ Level ${r.level + 1} cleared! (${Math.floor(r.dist)}m)`);
+      toast(`✅ Level ${r.level + 1} cleared! (${(r.dist / 1000).toFixed(1)}km)`);
       log(`🏁 ${ch.name} — level ${r.level + 1} cleared in ${fmtTime(r.time)}`);
     }
     renderAll();
@@ -1394,9 +1399,9 @@ function endRun(win, msg) {
 
 function updateRunnerHud() {
   if (!r) return;
-  $("#rh-level").textContent = `${r.ch.emoji} Lv ${r.level + 1}/3`;
+  $("#rh-level").textContent = `${r.ch.emoji} Lv ${r.level + 1}/${RUNNER_LEVELS}`;
   $("#rh-hearts").textContent = "❤".repeat(Math.max(0, r.hearts)) + "🖤".repeat(Math.max(0, 3 - r.hearts));
-  $("#rh-dist").textContent = `${Math.floor(r.dist)}m / ${r.goal}m`;
+  $("#rh-dist").textContent = `${(r.dist / 1000).toFixed(1)}km / ${(r.goal / 1000).toFixed(1)}km`;
   $("#rh-time").textContent = fmtTime(r.time);
 }
 
